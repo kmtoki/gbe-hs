@@ -27,14 +27,16 @@ data CPUState = CPUState {
     --_ime_prev :: Bool,
     _halting :: Bool,
     _stoping :: Bool,
-    _cycle :: Int
+    _cycle :: Int,
+    _cycleM :: Int
   } deriving Show
 
 makeLenses ''CPUState
 
 data OP
   = A | F | B | C | D | E | H | L
-  | AF | BC | DE | HL | SP | PC
+  | AF | BC | DE | HL | SP 
+  -- | PC
   | P_BC | P_DE | P_HL | P_WW
   | P_FF00_C | P_FF00_W
   | W | WW
@@ -64,7 +66,8 @@ newCPUState = CPUState {
   --_ime_prev = False,
   _halting = False,
   _stoping = False,
-  _cycle = 0
+  _cycle = 0,
+  _cycleM = 0
   }
 
 f :: Lens' CPUState Word8
@@ -160,16 +163,17 @@ read :: Address i => i -> CPU Word8
 read i = lift $ do
   r <- use reader
   a <- r $ toInt i
-  --lift $ logger $ ("read " ++ showHex (toInt i) ++ " -> " ++ showHex a) 
+  lift $ logger 1 ("Read: " ++ showHex (toInt i) ++ ": " ++ showHex a)
   pure a
 
 write :: Address i => i -> Word8 -> CPU ()
 write i w = lift $ do
   wr <- use writer
+  lift $ logger 1 ("Writ: " ++ showHex (toInt i) ++ ": " ++ showHex w)
   wr (toInt i) w
 
-log :: String -> CPU ()
-log = lift . lift . logger
+log :: Int -> String -> CPU ()
+log n s = lift $ lift $ logger n s
 
 push' :: Word8 -> CPU ()
 push' i = do
@@ -179,16 +183,14 @@ push' i = do
 
 pop' :: CPU Word8
 pop' = do
+  sp += 1
   sp' <- use sp
   w <- read sp'
-  sp += 1
   pure w
 
 showCPUState :: CPUState -> String
 showCPUState cpu =
-  ""
-  --"CPU"
-    ++ " pc:" ++ showHex (cpu^.pc)
+  "pc:" ++ showHex (cpu^.pc)
     ++ " sp:" ++ showHex (cpu^.sp)
     ++ " a:" ++ showHex (cpu^.a)
     ++ " f:" ++ showHex (cpu^.f)
@@ -213,10 +215,17 @@ executeCPU = do
   cycle .= 0
 
   cpu' <- get
+  let 
+    pc' = cpu'^.pc
+    showHex = flip N.showHex ""
+  code <- read pc'
+  op1 <- read (pc' + 1)
+  op2 <- read (pc' + 2)
   instr <- getInstructionName
   when (instr /= "nop") $ do
-    liftIO $ putStrLn instr
-    liftIO $ putStrLn (showCPUState cpu')
+    log 3 (showHex code ++ ":" ++ instr ++ " [" ++ showHex op1 ++ "," ++ showHex op2 ++ "]")
+    log 3 (showCPUState cpu')
+    log 3 ""
 
   dispatch
   serial
@@ -238,12 +247,15 @@ serial = do
     serial_counter += 1
     when (scc > 7) $ do
       sb <- read SB
-      if sb == 0xff then do
-        sbs <- use serial_buffer
-        serial_buffer .= V.empty
-        log ("Serial: " ++ (V.toList $ V.map (chr.fi) sbs))
-      else do
-        serial_buffer %= (flip V.snoc sb)
+      --if sb == 0xff then do
+      --  sbs <- use serial_buffer
+      --  serial_buffer .= V.empty
+      --  log 4 ("Serial: " ++ (V.toList $ V.map (chr.fi) sbs))
+      --else do
+      --  serial_buffer %= (flip V.snoc sb)
+      serial_buffer %= (flip V.snoc sb)
+      sbs <- use serial_buffer
+      log 4 ("Serial: " ++ (V.toList $ V.map (chr.fi) sbs))
 
       write SC $ clearBit sc 7
       interrupt
@@ -256,25 +268,19 @@ interrupt = do
     enable <- read IE
     request <- read IF
     let 
-      (addr, bit) = 
-        -- VBlank
+      (addr, bit, cate) = 
         if testBit enable 0 && testBit request 0 then
-          (0x40, 0)
-        -- LCDC STAT
+          (0x40, 0, "VBlack")
         else if testBit enable 1 && testBit request 1 then
-          (0x48, 1)
-        -- Time Overflow
+          (0x48, 1, "LSTAT")
         else if testBit enable 2 && testBit request 2 then
-          (0x50, 2)
-        -- Serial transfter completion
+          (0x50, 2, "Timer")
         else if testBit enable 3 && testBit request 3 then
-          (0x58, 3)
-        -- Keypad
+          (0x58, 3, "Seria")
         else if testBit enable 4 && testBit request 4 then
-          (0x60, 4)
-        -- Nothing
+          (0x60, 4, "Joypad")
         else
-          (0, 0)
+          (0, 0, "NOP")
     when (not (addr == 0 && bit == 0)) $ do
       --nop
       --nop
@@ -285,8 +291,9 @@ interrupt = do
       let (h',l') = sepWW pc'
       push' l'
       push' h'
-      cycle += 5
+      cycleM += 5
       pc .= addr
+      log 4 ("Interrupt: " ++ cate ++ " from " ++ showHex pc')
 
 
 
@@ -317,10 +324,13 @@ sub16_IsCarryHalf w1 w2 = (w3, w1 < w3, w1 < w4)
 
 add_Word16_SingedWord8_IsCarryHalf :: Word16 -> Word8 -> (Word16, Bool, Bool)
 add_Word16_SingedWord8_IsCarryHalf w i =
-  let i' = fi $ clearBit i 7 in
+  let
+    i' :: Word16
+    i' = fi $ clearBit i 7
+  in
   if testBit i 7 then
     let 
-      w' = w - i'
+      w' = w - (128 - i')
       h' = (w' .&. 0xf) - (i' .&. 0xf)
     in (w', w < w', w < h')
   else
@@ -329,6 +339,13 @@ add_Word16_SingedWord8_IsCarryHalf w i =
       h' = (w' .&. 0xf) + (i' .&. 0xf)
     in (w', w > w', h' > 0xf)
   
+
+readPC' :: CPU Word8
+readPC' = do
+  pc' <- use pc
+  w <- read pc'
+  pure w
+
 
 readPC :: CPU Word8
 readPC = do
@@ -348,13 +365,13 @@ readOP8 op = do
     E -> use e
     H -> use h
     L -> use l
-    W ->  cycle += 1 >> readPC
-    P_BC -> cycle += 1 >> use bc >>= read
-    P_DE -> cycle += 1 >> use de >>= read
-    P_HL -> cycle += 1 >> use hl >>= read
-    P_WW -> cycle += 3 >> (flip toWW <$> readPC <*> readPC) >>= read . toInt
-    P_FF00_C -> cycle += 1 >> use c >>= read . (0xff00 +) . toInt
-    P_FF00_W -> cycle += 2 >> readPC >>= read . (0xff00 +) . toInt
+    W ->  cycleM += 1 >> readPC
+    P_BC -> cycleM += 1 >> use bc >>= read
+    P_DE -> cycleM += 1 >> use de >>= read
+    P_HL -> cycleM += 1 >> use hl >>= read
+    P_WW -> cycleM += 3 >> (flip toWW <$> readPC <*> readPC) >>= read . toInt
+    P_FF00_C -> cycleM += 1 >> use c >>= read . (0xff00 +) . toInt
+    P_FF00_W -> cycleM += 2 >> readPC >>= read . (0xff00 +) . toInt
 
 writeOP8 :: OP -> Word8 -> CPU ()
 writeOP8 op w = do
@@ -367,12 +384,12 @@ writeOP8 op w = do
     E -> e .= w
     H -> h .= w
     L -> l .= w
-    P_BC -> cycle += 1 >> use bc >>= flip write w
-    P_DE -> cycle += 1 >> use de >>= flip write w
-    P_HL -> cycle += 1 >> use hl >>= flip write w
-    P_WW -> cycle += 3 >> (flip toWW <$> readPC <*> readPC) >>= flip write w
-    P_FF00_C -> cycle += 1 >> use c >>= flip write w . (0xff00 +) . toInt
-    P_FF00_W -> cycle += 2 >> readPC >>= flip write w . (0xff00 +) . toInt
+    P_BC -> cycleM += 1 >> use bc >>= flip write w
+    P_DE -> cycleM += 1 >> use de >>= flip write w
+    P_HL -> cycleM += 1 >> use hl >>= flip write w
+    P_WW -> cycleM += 3 >> (flip toWW <$> readPC <*> readPC) >>= flip write w
+    P_FF00_C -> cycleM += 1 >> use c >>= flip write w . (0xff00 +) . toInt
+    P_FF00_W -> cycleM += 2 >> readPC >>= flip write w . (0xff00 +) . toInt
     _ -> error $ show op
 
 readOP16 :: OP -> CPU Word16
@@ -383,8 +400,8 @@ readOP16 op = do
     DE -> use de
     HL -> use hl
     SP -> use sp
-    PC -> use pc
-    WW -> cycle += 2 >> (flip toWW <$> readPC <*> readPC)
+    --PC -> use pc
+    WW -> cycleM += 2 >> (flip toWW <$> readPC <*> readPC)
 
 writeOP16 :: OP -> Word16 -> CPU ()
 writeOP16 op ww = do
@@ -394,9 +411,9 @@ writeOP16 op ww = do
     DE -> de .= ww
     HL -> hl .= ww
     SP -> sp .= ww
-    PC -> pc .= ww
+    --PC -> pc .= ww
     P_WW -> do 
-      cycle += 3
+      cycleM += 3
       addr <- flip toWW <$> readPC <*> readPC
       let (h, l) = sepWW ww
       write addr l
@@ -415,26 +432,26 @@ modifyOP16 op f = do
 
 nop' :: CPU ()
 nop' = do
-  cycle += 1
+  cycleM += 1
 
 
 nop :: CPU ()
 nop = do
-  cycle += 1
+  cycleM += 1
 
 ld8 :: OP -> OP -> CPU ()
 ld8 op1 op2 = do
   w <- readOP8 op2
   writeOP8 op1 w
 
-  cycle += 1 
+  cycleM += 1 
 
 ld16 :: OP -> OP -> CPU ()
 ld16 op1 op2 = do
   ww <- readOP16 op2
   writeOP16 op1 ww
 
-  cycle += 2 
+  cycleM += 2 
 
 ld8_id_a_p_hl :: (Word16 -> Word16) -> CPU ()
 ld8_id_a_p_hl f = do
@@ -443,7 +460,7 @@ ld8_id_a_p_hl f = do
   a .= w
   hl .= f hl'
 
-  cycle += 2
+  cycleM += 2
 
 ld8_id_p_hl_a :: (Word16 -> Word16) -> CPU ()
 ld8_id_p_hl_a f = do
@@ -452,7 +469,7 @@ ld8_id_p_hl_a f = do
   write hl' a'
   hl .= f hl'
 
-  cycle += 2
+  cycleM += 2
 
 ld16_hl_sp_w :: CPU ()
 ld16_hl_sp_w = do
@@ -465,7 +482,7 @@ ld16_hl_sp_w = do
   negative .= False
   half .= h'
   carry .= c'
-  cycle += 3
+  cycleM += 3
 
 push :: OP -> CPU ()
 push op = do
@@ -474,7 +491,7 @@ push op = do
   push' l'
   push' h'
 
-  cycle += 4
+  cycleM += 4
 
 pop :: OP -> CPU ()
 pop op = do
@@ -482,7 +499,7 @@ pop op = do
   l' <- pop'
   writeOP16 op $ toWW h' l'
 
-  cycle += 3
+  cycleM += 3
 
 add :: OP -> CPU ()
 add op = do
@@ -495,7 +512,7 @@ add op = do
   negative .= False
   half .= h'
   carry .= c'
-  cycle += 1
+  cycleM += 1
 
 adc :: OP -> CPU ()
 adc op = do
@@ -511,7 +528,7 @@ adc op = do
   negative .= False
   half .= (h'' || h''')
   carry .= (c'' || c''')
-  cycle += 1
+  cycleM += 1
 
 sub :: OP -> CPU ()
 sub op = do
@@ -524,7 +541,7 @@ sub op = do
   negative .= True
   half .= h'
   carry .= c'
-  cycle += 1
+  cycleM += 1
 
 sbc :: OP -> CPU ()
 sbc op = do
@@ -540,7 +557,7 @@ sbc op = do
   negative .= True
   half .= (h'' || h''')
   carry .= (c'' || c''')
-  cycle += 1
+  cycleM += 1
 
 
 and :: OP -> CPU ()
@@ -554,7 +571,7 @@ and op = do
   negative .= False
   half .= True
   carry .= False
-  cycle += 1
+  cycleM += 1
 
 or :: OP -> CPU ()
 or op = do
@@ -567,7 +584,7 @@ or op = do
   negative .= False
   half .= False
   carry .= False
-  cycle += 1
+  cycleM += 1
 
 xor :: OP -> CPU ()
 xor op = do
@@ -580,7 +597,7 @@ xor op = do
   negative .= False
   half .= False
   carry .= False
-  cycle += 1
+  cycleM += 1
 
 
 cp :: OP -> CPU ()
@@ -593,7 +610,7 @@ cp op = do
   negative .= True
   half .= h'
   carry .= c'
-  cycle += 1
+  cycleM += 1
 
 inc8 :: OP -> CPU ()
 inc8 op = do
@@ -604,7 +621,7 @@ inc8 op = do
   zero .= isZero w'
   negative .= False
   half .= h'
-  cycle += 1
+  cycleM += 1
 
 dec8 :: OP -> CPU ()
 dec8 op = do
@@ -615,7 +632,7 @@ dec8 op = do
   zero .= isZero w'
   negative .= True
   half .= h'
-  cycle += 1
+  cycleM += 1
 
 add_hl :: OP -> CPU ()
 add_hl op = do
@@ -627,7 +644,7 @@ add_hl op = do
   negative .= False
   half .= h'
   carry .= c'
-  cycle += 2
+  cycleM += 2
 
 add_sp :: CPU ()
 add_sp = do
@@ -640,21 +657,21 @@ add_sp = do
   negative .= False
   half .= h'
   carry .= c'
-  cycle += 2
+  cycleM += 2
 
 inc16 :: OP -> CPU ()
 inc16 op = do
   ww <- readOP16 op
   writeOP16 op (ww + 1)
   
-  cycle += 2
+  cycleM += 2
 
 dec16 :: OP -> CPU ()
 dec16 op = do
   ww <- readOP16 op
   writeOP16 op (ww - 1)
   
-  cycle += 2
+  cycleM += 2
 
 daa :: CPU ()
 daa = do
@@ -678,7 +695,7 @@ daa = do
   a'' <- use a
   zero .= isZero a''
   half .= False
-  cycle += 1
+  cycleM += 1
 
 cpl :: CPU ()
 cpl = do
@@ -686,7 +703,7 @@ cpl = do
 
   negative .= True
   half .= True
-  cycle += 1
+  cycleM += 1
       
 ccf :: CPU ()
 ccf = do
@@ -694,7 +711,7 @@ ccf = do
 
   negative .= False
   half .= False
-  cycle += 1
+  cycleM += 1
 
 scf :: CPU ()
 scf = do
@@ -702,20 +719,20 @@ scf = do
 
   negative .= False
   half .= False
-  cycle += 1
+  cycleM += 1
 
 halt :: CPU ()
 halt = do
   halting .= True
 
-  cycle += 1
+  cycleM += 1
 
 stop :: CPU ()
 stop = do
   --halting .= True
   stoping .= True
 
-  cycle += 1
+  cycleM += 1
 
 di :: CPU ()
 di = do
@@ -723,7 +740,7 @@ di = do
   --write IE 0x0
   ime .= False
 
-  cycle += 1
+  cycleM += 1
 
 ei :: CPU ()
 ei = do
@@ -731,7 +748,7 @@ ei = do
   --write IE 0xff
   ime .= False
 
-  cycle += 1
+  cycleM += 1
 
 jp :: OP -> CPU ()
 jp op = do
@@ -748,8 +765,8 @@ jp op = do
 
 jr :: OP -> CPU ()
 jr op = do
-  pc' <- use pc
   i <- readPC
+  pc' <- use pc
   zero' <- use zero
   carry' <- use carry
   let (pc'', _, _) = add_Word16_SingedWord8_IsCarryHalf pc' i
@@ -760,15 +777,15 @@ jr op = do
     Carry -> when carry' $ pc .= pc''
     Always -> pc .= pc''
 
-  cycle += 2
+  cycleM += 2
 
 call :: OP -> CPU ()
 call op = do
-  pc' <- use pc
   ww <- readOP16 WW
+  pc' <- use pc
   zero' <- use zero
   carry' <- use carry
-  let (h',l') = sepWW $ pc' + 1
+  let (h',l') = sepWW $ pc'
   push' l'
   push' h'
   case op of
@@ -778,11 +795,12 @@ call op = do
     Carry -> when carry' $ pc .= ww
     Always -> pc .= ww
 
-  cycle += 1
+  cycleM += 1
 
 rst :: Word16 -> CPU ()
 rst ww = do
   pc' <- use pc
+  --let (h',l') = sepWW (pc' - 1)
   let (h',l') = sepWW pc'
   push' l'
   push' h'
@@ -797,15 +815,15 @@ reti = do
   pc .= toWW h' l'
   ime .= True
 
-  cycle += 2
+  cycleM += 2
 
 ret :: OP -> CPU ()
 ret op = do
   h' <- pop'
   l' <- pop'
+  let pc' = toWW h' l'
   zero' <- use zero
   carry' <- use carry
-  let pc' = toWW h' l'
   case op of
     NotZero -> when (not zero') $ pc .= pc'
     Zero -> when zero' $ pc .= pc'
@@ -813,7 +831,7 @@ ret op = do
     Carry -> when carry' $ pc .= pc'
     Always -> pc .= pc'
 
-  cycle += 2
+  cycleM += 2
 
 
 
@@ -827,7 +845,7 @@ swap op = do
   negative .= False
   half .= False
   carry .= False
-  cycle += 1
+  cycleM += 1
 
 rlc :: OP -> CPU ()
 rlc op = do
@@ -840,7 +858,7 @@ rlc op = do
   negative .= False
   half .= False
 
-  cycle += 1
+  cycleM += 1
 
 rl :: OP -> CPU ()
 rl op = do
@@ -853,7 +871,7 @@ rl op = do
   zero .= isZero w'
   negative .= False
   half .= False
-  cycle += 1
+  cycleM += 1
 
 rrc :: OP -> CPU ()
 rrc op = do
@@ -865,7 +883,7 @@ rrc op = do
   zero .= isZero w'
   negative .= False
   half .= False
-  cycle += 1
+  cycleM += 1
 
 
 rr :: OP -> CPU ()
@@ -880,7 +898,7 @@ rr op = do
   negative .= False
   half .= False
 
-  cycle += 1
+  cycleM += 1
 
 sla :: OP -> CPU ()
 sla op = do
@@ -892,7 +910,7 @@ sla op = do
   zero .= isZero w'
   negative .= False
   half .= False
-  cycle += 2
+  cycleM += 2
 
 sra :: OP -> CPU ()
 sra op = do
@@ -904,7 +922,7 @@ sra op = do
   zero .= isZero w'
   negative .= False
   half .= False
-  cycle += 1
+  cycleM += 1
 
 srl :: OP -> CPU ()
 srl op = do
@@ -916,7 +934,7 @@ srl op = do
   zero .= isZero w'
   negative .= False
   half .= False
-  cycle += 1
+  cycleM += 1
 
 bit :: Int -> OP -> CPU ()
 bit i op = do
@@ -927,7 +945,7 @@ bit i op = do
   zero .= w'
   negative .= False
   half .= True
-  cycle += 1
+  cycleM += 1
 
 set :: Int -> OP -> CPU ()
 set i op = do
@@ -935,7 +953,7 @@ set i op = do
   let w' = setBit w i
   writeOP8 op w'
 
-  cycle += 1
+  cycleM += 1
 
 res :: Int -> OP -> CPU ()
 res i op = do
@@ -943,7 +961,7 @@ res i op = do
   let w' = clearBit w i
   writeOP8 op w'
 
-  cycle += 1
+  cycleM += 1
 
 
 
@@ -1224,7 +1242,7 @@ dispatch = do
 
     0xcb -> do
       instruction' <- readPC
-      cycle += 1
+      cycleM += 1
       case instruction' of 
         0x37 -> swap A
         0x30 -> swap B

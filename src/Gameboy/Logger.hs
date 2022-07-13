@@ -13,30 +13,34 @@ import qualified Data.Vector as V
 type Logger a = StateT LoggerState IO a
 
 data LoggerState = LoggerState {
+    _level :: Int,
     _isLogging :: Bool,
     _isPrint :: Bool,
-    _size :: Int,
+    _bufSize :: Int,
     _buffer :: V.Vector String
   }
 
 makeLenses ''LoggerState
 
 
-newLoggerState :: Bool -> Bool -> Int -> LoggerState
-newLoggerState l p s = LoggerState {
-  _isLogging = l,
+newLoggerState :: Int -> Bool -> Bool -> Int -> LoggerState
+newLoggerState n p l s = LoggerState {
+  _level = n,
   _isPrint = p,
-  _size = s,
+  _isLogging = l,
+  _bufSize = s,
   _buffer = V.empty
   }
 
-logger :: String -> Logger ()
-logger str = do
+logger :: Int -> String -> Logger ()
+logger nn str = do
   p <- use isPrint
-  when p $ liftIO $ putStrLn str
+  n <- use level
+  when (p && n <= nn) $ do
+    liftIO $ putStrLn str
 
   l <- use isLogging
-  s <- use size
+  s <- use bufSize
   b <- use buffer
   when l $ do
     buffer .=
