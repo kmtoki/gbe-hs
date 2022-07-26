@@ -1,7 +1,25 @@
 --- 112100180
 BANK: $C000
 PC:$06F1 C3 F1 06 78 3C CD 50 03 CD 51 08 C9 57 CD E3 05 E5 CD D2 02 3A
-SP:$D65E ED 06 40 87 |5C|D6 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+SP:$D65E ED 06 40 87 |5C| D6 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 A:87 F:C0 B:07 C:00 D:70 E:00 H:D6 L:5C
 Z:1 N:1 H:0 C:0 IME:0 HALT:0 SB:"cpu_instrs\n\n01:ok  02:04  03:01  04:ok  05:01  06:01  07:01  \n\nFailed 5 tests.\n"
 > JP Always "$6F1"
+
+-- isLogging = False
+> stack build && Measure-Command { & { stack exec gameboy-exe.exe -- .\roms\gb_test_roms\cpu_instrs\cpu_instrs.gb } }
+
+Days              : 0
+Hours             : 0
+Minutes           : 0
+Seconds           : 39
+Milliseconds      : 923
+Ticks             : 399238303
+TotalDays         : 0.000462081369212963
+TotalHours        : 0.0110899528611111
+TotalMinutes      : 0.665397171666667
+TotalSeconds      : 39.9238303
+TotalMilliseconds : 39923.8303
+
+
+hoge...
