@@ -25,6 +25,7 @@ dependencies:
 - vector
 - microlens-platform
 - mtl
+- regex-compat
 
 library:
   source-dirs: src

@@ -11,7 +11,12 @@ module Gameboy.Utils (
   fi,
   chr,
   showHex,
+  showHex',
+  showHex'',
+  showHex16,
   showBin,
+  showBin',
+  showSignedWord8,
   toWW,
   sepWW,
   isZero,
@@ -25,7 +30,7 @@ import Lens.Micro.Platform
 import Data.Bits
 import Data.Word
 import Data.Int
-import Data.Char (chr, intToDigit)
+import Data.Char (chr, intToDigit, toUpper)
 import Control.Monad
 import Control.Monad.State.Strict
 import Control.Monad.IO.Class
@@ -39,11 +44,41 @@ type ROM = V.Vector Word8
 fi :: (Integral a, Integral b) => a -> b
 fi = fromIntegral
 
+showHex'' :: (Show a, Integral a) => a -> String
+showHex'' x = map toUpper $ N.showHex x ""
+
 showHex :: (Show a, Integral a) => a -> String
-showHex a = "0x" ++ N.showHex a ""
+showHex a = "$" ++ showHex'' a
+
+showHex' :: (Show a, Integral a) => a -> String
+showHex' x = if length s == 1 then "0" ++ s else s
+  where
+    s = showHex'' x
+
+showHex16 :: (Show a, Integral a) => a -> String
+showHex16 a = "$" ++ showHex16' a
+
+showHex16' :: (Show a, Integral a) => a -> String
+showHex16' x = if l > 0 then replicate l '0' ++ s else s
+  where
+    s = showHex'' x
+    l = 4 - length s
+
+
 
 showBin :: (Show a, Integral a) => a -> String
 showBin a = "0b" ++ N.showIntAtBase 2 intToDigit a ""
+
+showBin' :: (Show a, Integral a) => a -> String
+showBin' a = N.showIntAtBase 2 intToDigit a ""
+
+showSignedWord8 :: Word8 -> String
+showSignedWord8 i = 
+  if testBit i 7 then
+      "-" ++ show (128 - clearBit i 7)
+  else
+      "+" ++ show (clearBit i 7)
+
 
 toWW :: Word8 -> Word8 -> Word16
 toWW h l = shift (fi h) 8 .|. fi l
@@ -132,6 +167,11 @@ instance Address Registers where
     SB -> 0xff01
     SC -> 0xff02
 
+    DIV -> 0xff04
+    TIMA -> 0xff05
+    TMA -> 0xff06
+    TAC -> 0xff07
+
     NR10 -> 0xff10
     NR11 -> 0xff11
     NR12 -> 0xff12
@@ -170,17 +210,12 @@ instance Address Registers where
     BCPD -> 0xff69
     OCPS -> 0xff6a
     DMA -> 0xff46
+    VBK -> 0xff4f
     HDMA1 -> 0xff51
     HDMA2 -> 0xff52
     HDMA3 -> 0xff53
     HDMA4 -> 0xff54
     HDMA5 -> 0xff55
-    VBK -> 0xff4f
-
-    DIV -> 0xff04
-    TIMA -> 0xff05
-    TMA -> 0xff06
-    TAC -> 0xff07
 
     IF -> 0xff0f
     IE -> 0xffff

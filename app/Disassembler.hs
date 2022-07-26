@@ -5,18 +5,21 @@ import Prelude hiding (read, cycle, log, or, and)
 import Gameboy.Cartrige hiding (rom)
 import Gameboy.Utils hiding (set,bit,xor)
 
+import qualified System.IO as IO
 import qualified Numeric as N
 import qualified Data.Vector as V
+import qualified Data.Vector.Mutable as VM
 import qualified Data.ByteString as B
 
 type Disassembler a = StateT DisassemblerState IO a
 
 data DisassemblerState = DisassemblerState {
     _rom :: V.Vector Word8,
-    _buffer :: V.Vector String,
+    _buffer :: VM.IOVector String,
+    _pos :: Int,
     _pc :: Int,
     _pc' :: Int
-  } deriving Show
+  }
 
 makeLenses ''DisassemblerState
 
@@ -61,13 +64,16 @@ instance Show OP where
     X -> ""
     Info s -> s
 
-newDisassemblerState :: ROM -> DisassemblerState
-newDisassemblerState rom = DisassemblerState {
-  _rom = rom,
-  _buffer = V.empty,
-  _pc = 0,
-  _pc' = 0
-  }
+newDisassemblerState :: ROM -> IO DisassemblerState
+newDisassemblerState rom = do
+  bf <- VM.replicate (V.length rom + 1) "XXXX"
+  pure $ DisassemblerState {
+      _rom = rom,
+      _buffer = bf,
+      _pos = 0,
+      _pc = 0,
+      _pc' = 0
+    }
 
 read :: Address i => i -> Disassembler Word8
 read i = do
@@ -84,19 +90,19 @@ readPC = do
 readOP :: OP -> Disassembler String
 readOP op = case op of
   P_WW -> do
-    pc += 2
+    --pc += 2
     ww <- flip toWW <$> readPC <*> readPC
     pure $ ("(" ++ showHex ww ++ ")")
   P_FF00_WW -> do
-    pc += 2
+    --pc += 2
     ww <- flip toWW <$> readPC <*> readPC
     pure $ ("($FF00+" ++ showHex ww ++ ")")
   W -> do
-    pc += 1
+    --pc += 1
     w <- readPC
     pure $ showHex w
   WW -> do
-    pc += 2
+    --pc += 2
     ww <- flip toWW <$> readPC <*> readPC
     pure $ showHex ww
   _ -> pure $ show op
@@ -111,206 +117,209 @@ showPC x = num ++ hex
     off = width - len
     num = replicate (if off > 0 then off else 0) '0' 
 
-dis :: String -> OP -> OP -> Disassembler ()
-dis instr op1 op2 = do
+emit :: String -> OP -> OP -> Disassembler ()
+emit instr op1 op2 = do
   pc'' <- use pc'
   s1 <- readOP op1
   s2 <- readOP op2
   let assem = (showPC pc'' ++ ": " ++ instr ++ " " ++ s1 ++ " " ++ s2)
-  buffer %= (flip V.snoc assem)
+  p <- use pos
+  b <- use buffer
+  VM.write b p assem
+  pos += 1
 
 nop :: Disassembler ()
 nop = do
-  dis "nop" X X
+  emit "nop" X X
 
 ld8 :: OP -> OP -> Disassembler ()
 ld8 op1 op2 = do
-  dis "ld8" op1 op2 
+  emit "ld8" op1 op2 
 
 ld16 :: OP -> OP -> Disassembler ()
 ld16 op1 op2 = do
-  dis "ld16" op1 op2 
+  emit "ld16" op1 op2 
 
 ld8_id_a_p_hl :: String -> Disassembler ()
 ld8_id_a_p_hl s = do
-  dis ("ld8" ++ s) A P_HL
+  emit ("ld8" ++ s) A P_HL
 
 ld8_id_p_hl_a :: String -> Disassembler ()
 ld8_id_p_hl_a s = do
-  dis ("ld8" ++ s) P_HL A
+  emit ("ld8" ++ s) P_HL A
 
 ld16_hl_sp_w :: Disassembler ()
 ld16_hl_sp_w = do
   w <- readPC
-  dis "ld16" HL $ Info ("SP + " ++ show (fi w :: Int8))
+  emit "ld16" HL $ Info ("SP + " ++ show (fi w :: Int8))
 
 push :: OP -> Disassembler ()
 push op = do
-  dis "push" op X
+  emit "push" op X
 
 pop :: OP -> Disassembler ()
 pop op = do
-  dis "pop" op X
+  emit "pop" op X
 
 add :: OP -> Disassembler ()
 add op = do
-  dis "add" A op
+  emit "add" A op
 
 adc :: OP -> Disassembler ()
 adc op = do
-  dis "adc" A op
+  emit "adc" A op
 
 sub :: OP -> Disassembler ()
 sub op = do
-  dis "sub" A op
+  emit "sub" A op
 
 sbc :: OP -> Disassembler ()
 sbc op = do
-  dis "sbc" A op
+  emit "sbc" A op
 
 
 and :: OP -> Disassembler ()
 and op = do
-  dis "and" A op
+  emit "and" A op
 
 or :: OP -> Disassembler ()
 or op = do
-  dis "or" A op
+  emit "or" A op
 
 xor :: OP -> Disassembler ()
 xor op = do
-  dis "xor" A op
+  emit "xor" A op
 
 
 cp :: OP -> Disassembler ()
 cp op = do
-  dis "cp" A op
+  emit "cp" A op
 
 inc8 :: OP -> Disassembler ()
 inc8 op = do
-  dis "inc8" op X
+  emit "inc8" op X
 
 dec8 :: OP -> Disassembler ()
 dec8 op = do
-  dis "dnc8" op X
+  emit "dnc8" op X
 
 add_hl :: OP -> Disassembler ()
 add_hl op = do
-  dis "add16" HL op
+  emit "add16" HL op
 
 add_sp :: Disassembler ()
 add_sp = do
   w <- readPC
-  dis "add16" SP $ Info $ show $ (fi w :: Int8)
+  emit "add16" SP $ Info $ show $ (fi w :: Int8)
 
 inc16 :: OP -> Disassembler ()
 inc16 op = do
-  dis "inc16" op X
+  emit "inc16" op X
 
 dec16 :: OP -> Disassembler ()
 dec16 op = do
-  dis "dnc16" op X
+  emit "dnc16" op X
 
 daa :: Disassembler ()
 daa = do
-  dis "daa" X X
+  emit "daa" X X
 
 cpl :: Disassembler ()
 cpl = do
-  dis "cpl" (Info "#not A") X
+  emit "cpl" (Info "#not A") X
       
 ccf :: Disassembler ()
 ccf = do
-  dis "cff" (Info "#not carry") X
+  emit "cff" (Info "#not carry") X
 
 scf :: Disassembler ()
 scf = do
-  dis "scf" (Info "#set carry") X
+  emit "scf" (Info "#set carry") X
 
 halt :: Disassembler ()
 halt = do
-  dis "halt" X X
+  emit "halt" X X
 
 stop :: Disassembler ()
 stop = do
-  dis "stop" X X
+  emit "stop" X X
 
 di :: Disassembler ()
 di = do
-  dis "di" X X
+  emit "di" X X
 
 ei :: Disassembler ()
 ei = do
-  dis "ei" X X
+  emit "ei" X X
 
 jp :: OP -> Disassembler ()
 jp op = do
-  dis "jp" op WW
+  emit "jp" op WW
 
 jr :: OP -> Disassembler ()
 jr op = do
   i <- readPC
-  dis "jr" op $ Info $ show (fi i :: Int8)
+  emit "jr" op $ Info $ show (fi i :: Int8)
 
 call :: OP -> Disassembler ()
 call op = do
-  dis "call" op WW
+  emit "call" op WW
 
 rst :: Word16 -> Disassembler ()
 rst ww = do
-  dis "rst" (Info $ showHex ww) X
+  emit "rst" (Info $ showHex ww) X
  
 reti :: Disassembler ()
 reti = do
-  dis "reti" X X
+  emit "reti" X X
 
 ret :: OP -> Disassembler ()
 ret op = do
-  dis "ret" op X
+  emit "ret" op X
 
 swap :: OP -> Disassembler () 
 swap op = do
-  dis "swap" op X
+  emit "swap" op X
 
 rlc :: OP -> Disassembler ()
 rlc op = do
-  dis "rlc" op X
+  emit "rlc" op X
 
 rl :: OP -> Disassembler ()
 rl op = do
-  dis "rl" op X
+  emit "rl" op X
 
 rrc :: OP -> Disassembler ()
 rrc op = do
-  dis "rrc" op X
+  emit "rrc" op X
 
 rr :: OP -> Disassembler ()
 rr op = do
-  dis "rr" op X
+  emit "rr" op X
 
 sla :: OP -> Disassembler ()
 sla op = do
-  dis "sla" op X
+  emit "sla" op X
 
 sra :: OP -> Disassembler ()
 sra op = do
-  dis "sra" op X
+  emit "sra" op X
 
 srl :: OP -> Disassembler ()
 srl op = do
-  dis "srl" op X
+  emit "srl" op X
 
 bit :: Int -> OP -> Disassembler ()
 bit i op = do
-  dis "bit" op (Info $ show i)
+  emit "bit" op (Info $ show i)
 
 set :: Int -> OP -> Disassembler ()
 set i op = do
-  dis "set" op (Info $ show i)
+  emit "set" op (Info $ show i)
 
 res :: Int -> OP -> Disassembler ()
 res i op = do
-  dis "res" op (Info $ show i)
+  emit "res" op (Info $ show i)
 
 dispatch :: Disassembler ()
 dispatch = do
@@ -857,21 +866,24 @@ dispatch = do
         0xbd -> res 7 L
         0xbe -> res 7 P_HL
 
-        --x -> dis "CB XXX" (Info $ showHex x) X
+        --x -> emit "CB XXX" (Info $ showHex x) X
         _ -> pure ()
-    --x -> dis "XXX" (Info $ showHex x) X
+    --x -> emit "XXX" (Info $ showHex x) X
     _ -> pure ()
 
-executeDis = do
+executeDisassembler = do
   pc' <- use pc
   len <- V.length <$> use rom
   when (pc' < len) $ do
     dispatch
-    executeDis
+    executeDisassembler
 
-mainDis = do
-  d <- newDisassemblerState <$> readFileROM "roms/gb_test_roms/cpu_instrs/cpu_instrs.gb"
-  d' <- execStateT executeDis d
-  let asm = d'^.buffer & V.toList & concatMap (++ "\n")
-  writeFile ("disasm/cpu_instrs.gb") asm
-    
+main' = do
+  rom' <- readFileROM "roms/gb_test_roms/cpu_instrs/cpu_instrs.gb"
+  d <- newDisassemblerState rom'
+  d' <- execStateT executeDisassembler d
+
+  fh <- IO.openFile "disasm/cpu_instrs.gb" IO.WriteMode
+  VM.forM_ (d'^.buffer) $ \v -> do
+    IO.hPutStrLn fh v
+  IO.hClose fh

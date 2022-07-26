@@ -2,7 +2,7 @@ module Gameboy.Logger where
 
 import Gameboy.Utils
 
-import qualified Data.Vector as V
+import qualified Data.Vector.Mutable as VM
 
 
 --newtype Logger m a = Logger {
@@ -17,34 +17,42 @@ data LoggerState = LoggerState {
     _isLogging :: Bool,
     _isPrint :: Bool,
     _bufSize :: Int,
-    _buffer :: V.Vector String
+    _pos :: Int,
+    _buffer :: VM.IOVector String
   }
 
 makeLenses ''LoggerState
 
 
-newLoggerState :: Int -> Bool -> Bool -> Int -> LoggerState
-newLoggerState n p l s = LoggerState {
-  _level = n,
-  _isPrint = p,
-  _isLogging = l,
-  _bufSize = s,
-  _buffer = V.empty
-  }
+newLoggerState :: Int -> Bool -> Bool -> Int -> IO LoggerState
+newLoggerState n p l s = do
+  buf <- VM.replicate s ""
+  pure $ LoggerState {
+    _level = n,
+    _isPrint = p,
+    _isLogging = l,
+    _bufSize = s,
+    _pos = 0,
+    _buffer = buf
+    }
 
-logger :: Int -> String -> Logger ()
-logger nn str = do
-  p <- use isPrint
+logging :: Int -> String -> Logger ()
+logging nn str = do
   n <- use level
-  when (p && n <= nn) $ do
-    liftIO $ putStrLn str
+  when (n <= nn) $ do
+    p <- use isPrint
+    when p $ do
+      liftIO $ putStrLn str
 
-  l <- use isLogging
-  s <- use bufSize
-  b <- use buffer
-  when l $ do
-    buffer .=
-      if V.length b < s then
-        V.snoc b str
+    l <- use isLogging
+    when l $ do
+      size <- use bufSize
+      buf <- use buffer
+      p <- use pos
+ 
+      lift $ VM.write buf p str
+      if (p + 1) == size then
+        pos .= 0
       else
-        V.snoc (V.tail b) str
+        pos += 1
+
