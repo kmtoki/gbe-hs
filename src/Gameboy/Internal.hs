@@ -1,82 +1,84 @@
 module Gameboy.Internal where
 
-import Gameboy.CPU
 import Gameboy.Cartrige
-import Gameboy.MBC
-import Gameboy.Logger
 import Gameboy.Utils
 
 import qualified Data.Vector as V
 import qualified Data.Vector.Mutable as VM
 
---type InternalMonad a = StateT Internal IO a
---
---data Internal = Internal {
---  mbc :: MBCState,
---  log :: LogState,
---  }
---
---type GBMonad a = StateT GBState IO a
---
-----executeGB = do
-----  cpu <~ (lift $ execStateT execCPU cpu')
---
---data GBState = GBState {
---  cpu :: CPUState,
---  mbc :: MBCState
---  }
+type GB a = StateT GBState IO a
 
---data GBState' = GBState' {
---    ram :: RAM,
---    ramx :: RAM,
---    rom :: ROM,
---    mbc :: MBC,
---    log :: Log,
---  }
---
---type GBState a = StateT GBState' IO a
+data GBState = GBState {
+  _cpu :: CPUState,
+  _mbc :: MBCState,
+  _logger :: LoggerState
+  }
 
---newtype GBStateM a = GBStateM (GBState -> IO (GBState, a))
---
---
---instance Functor GBStateM where
---  fmap f (GBStateM g) = GBStateM $ \s -> do
---    (s', a) <- g s
---    pure (s', f a)
---          
---
---instance Applicative GBStateM where
---  pure a = GBStateM (\s -> pure (s, a))
---  (GBStateM ff) <*> (GBStateM g) = GBStateM $ \s -> do
---    (s', a) <- g s
---    (s'', f) <- ff s'
---    pure (s'', f a)
---
---instance Monad GBStateM where
---  (GBStateM f) >>= g = GBStateM $ \s -> do
---    (s', a) <- f s
---    let (GBStateM h) = g a
---    h s'
---
---runGBStateM :: GBState -> GBStateM b -> IO GBState
---runGBStateM s (GBStateM f) = fst <$> f s
---
---read :: GBStateM a -> Word16 -> GBStateM Word8
---read m i = GBStateM $ \s -> do
---  (mbc', a) <- (reader s) (mbc s) i
---  pure $ (s { mbc = mbc' }, a)
---
---write :: GBStateM a -> Word16 -> GBStateM ()
---write m i a = GBStateM $ \s -> do
---  mbc' <- (writer s) (mbc s) i a
---  pure $ (s { mbc = mbc' }, ())
+data Memory = 
+  Memory {
+    _cartrige :: Cartrige,
+    _ram :: RAM,
+    _ramx :: RAM
+  }
+
+data CPUState = CPUState {
+    _a, __f, _b, _c, _d, _e, _h, _l :: Word8,
+    _sp, _pc :: Word16,
+    --__zero, __negative, __half, __carry :: Bool,
+    _serial_counter :: Word8,
+    _serial_buffer :: V.Vector Word8,
+    _sys_counter :: Word16,
+    _ime :: Bool,
+    --_ime_prev :: Bool,
+    _halting :: Bool,
+    _stoping :: Bool,
+    _cycle :: Int,
+    _cycleM :: Int,
+    _exe_counter :: Word64
+  } deriving Show
+
+data MBCState = MBCState {
+    _mbcnState :: MBCNState,
+    _memory :: Memory,
+    _reader :: Int -> GB Word8,
+    _writer :: Int -> Word8 -> GB ()
+  }
+
+data MBCNState
+  = MBC0State
+  | MBC1State {
+    _bank :: Int,
+    _bank1 :: Int,
+    _bank2 :: Int,
+    _bankRAMX :: Int,
+    _enableRAMX :: Bool,
+    _bankingMode :: Bool
+  } 
+  deriving Show
+
+data LoggerState = LoggerState {
+    _level :: Int,
+    _isLogging :: Bool,
+    _isPrint :: Bool,
+    _bufSize :: Int,
+    _pos :: Int,
+    _buffer :: VM.IOVector String
+  }
+
+makeLenses ''GBState
+makeLenses ''Memory
+makeLenses ''CPUState
+makeLenses ''MBCState
+makeLenses ''MBCNState
+makeLenses ''LoggerState
 
 
+instance Show MBCState where
+  show (MBCState s m r w) = "MBCState { _memory = " ++ show m ++ ", mbcnState = " ++ show s ++ " }"
 
---class GBMemory mbc where
---  read :: GBState mbc -> Word16 -> IO Word8
---  write :: GBState mbc -> Word16 -> Word8 -> IO ()
---
---newtype MBCState = IORef
+instance Show Memory where
+  show m = "Memory RAM RAMX ROM Cartrige[" ++ c ++ "]"
+    where
+      c =  show (m^.cartrige^.mbcType) ++ "," ++ showHex (m^.cartrige^.rom&V.length)
 
 

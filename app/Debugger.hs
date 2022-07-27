@@ -1,5 +1,6 @@
 module Debugger where
 
+import Gameboy.Internal
 import Gameboy.Cartrige
 import Gameboy.CPU hiding (dispatch)
 import Gameboy.MBC
@@ -19,17 +20,8 @@ import qualified Data.Vector.Mutable as VM
 import qualified Text.Read as T
 import Text.Regex
 
-type Debugger a = StateT DebuggerState IO a
-
-data DebuggerState = DebuggerState {
-    _cpu :: CPUState,
-    _mbc :: MBCState,
-    _logger :: LoggerState,
-    _car :: Cartrige,
-    _counter :: Int
-  }
-
-makeLenses ''DebuggerState
+type DebuggerState = GBState
+type Debugger a = GB a
 
 newDebuggerState :: String -> IO DebuggerState
 newDebuggerState gb = do
@@ -38,21 +30,11 @@ newDebuggerState gb = do
   car' <- readCartrige gb
   mbc' <- newMBCState car'
 
-  pure $ DebuggerState cpu' mbc' logger' car' 0
+  pure $ GBState cpu' mbc' logger'
 
 step :: Debugger ()
 step = do
-  counter += 1
-  cpu' <- use cpu
-  mbc' <- use mbc
-  logger' <- use logger
-
-  let run = flip runStateT
-  (((_,cpu''),mbc''),logger'') <- lift $ run logger' $ run mbc' $ run cpu' executeCPU
-
-  cpu .= cpu''
-  mbc .= mbc''
-  logger .= logger''
+  executeCPU
 
 showRAM :: Debugger ()
 showRAM = do
@@ -189,14 +171,15 @@ executeDebugger = do
 debugger :: String -> IO ()
 debugger  file = do
   debuggerState <- newDebuggerState file
-  print $ debuggerState^.car
+  print $ debuggerState^.mbc^.memory^.cartrige
   go debuggerState 0
   where
     go ds n = do
       (_, ds') <- runStateT executeDebugger ds
+      when (n < 10000000) $ go ds' (n + 1)
+
       --(_, ds') <- runStateT shell ds
-      when (n < 10000000) $ do
-        go ds' (n + 1)
+      --go ds' (n + 1)
 
 main' = debugger "roms/gb_test_roms/cpu_instrs/cpu_instrs.gb"
 
