@@ -368,7 +368,6 @@ readPC = do
   cpu.pc += 1
   pure w
 
-{-# INLINE readOP8 #-}
 readOP8 :: OP -> GB Word8
 readOP8 op = do
   case op of
@@ -388,7 +387,6 @@ readOP8 op = do
     P_FF00_C -> cpu.cycleM += 1 >> (use $ cpu.c) >>= read . (0xff00 +) . toInt
     P_FF00_W -> cpu.cycleM += 2 >> readPC >>= read . (0xff00 +) . toInt
 
-{-# INLINE writeOP8 #-}
 writeOP8 :: OP -> Word8 -> GB ()
 writeOP8 op w = do
   case op of
@@ -408,7 +406,6 @@ writeOP8 op w = do
     P_FF00_W -> cpu.cycleM += 2 >> readPC >>= flip write w . (0xff00 +) . toInt
     _ -> error $ show op
 
-{-# INLINE readOP16 #-}
 readOP16 :: OP -> GB Word16
 readOP16 op = do
   case op of
@@ -419,7 +416,6 @@ readOP16 op = do
     SP -> use $ cpu.sp
     WW -> cpu.cycleM += 2 >> (flip toWW <$> readPC <*> readPC)
 
-{-# INLINE writeOP16 #-}
 writeOP16 :: OP -> Word16 -> GB ()
 writeOP16 op ww = do
   case op of
