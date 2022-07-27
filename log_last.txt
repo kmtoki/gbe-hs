@@ -12,14 +12,28 @@ Z:1 N:1 H:0 C:0 IME:0 HALT:0 SB:"cpu_instrs\n\n01:ok  02:04  03:01  04:ok  05:01
 Days              : 0
 Hours             : 0
 Minutes           : 0
-Seconds           : 39
-Milliseconds      : 923
-Ticks             : 399238303
-TotalDays         : 0.000462081369212963
-TotalHours        : 0.0110899528611111
-TotalMinutes      : 0.665397171666667
-TotalSeconds      : 39.9238303
-TotalMilliseconds : 39923.8303
+Seconds           : 31
+Milliseconds      : 424
+Ticks             : 314240322
+TotalDays         : 0.000363704076388889
+TotalHours        : 0.00872889783333333
+TotalMinutes      : 0.52373387
+TotalSeconds      : 31.4240322
+TotalMilliseconds : 31424.0322
 
 
-hoge...
+-- branch global-state 
+> stack build && Measure-Command { & { stack exec gameboy-exe.exe -- .\roms\gb_test_roms\cpu_instrs\cpu_instrs.gb } }
+
+Days              : 0
+Hours             : 0
+Minutes           : 0
+Seconds           : 25
+Milliseconds      : 771
+Ticks             : 257715230
+TotalDays         : 0.000298281516203704
+TotalHours        : 0.00715875638888889
+TotalMinutes      : 0.429525383333333
+TotalSeconds      : 25.771523
+TotalMilliseconds : 25771.523
+
