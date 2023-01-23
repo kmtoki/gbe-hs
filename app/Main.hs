@@ -6,7 +6,7 @@ import Control.Concurrent.MVar
 import qualified Data.Vector as V
 import qualified Text.Read as T
 
-import qualified Debugger as D
+import qualified Debugger2 as D
 --import qualified Disassembler as DD
 
 main :: IO ()

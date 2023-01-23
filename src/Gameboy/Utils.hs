@@ -8,6 +8,7 @@ module Gameboy.Utils (
   module Data.Word,
   RAM,
   ROM,
+  (.^.),
   fi,
   chr,
   showHex,
@@ -40,6 +41,10 @@ import qualified Data.Vector.Mutable as VM
 
 type RAM = VM.IOVector Word8
 type ROM = V.Vector Word8
+
+(.^.) :: Bits a => a -> a -> a
+(.^.) = xor
+infixl 7 .^.
 
 fi :: (Integral a, Integral b) => a -> b
 fi = fromIntegral
