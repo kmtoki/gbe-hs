@@ -121,6 +121,10 @@ readLogList n = do
  
   go offset 0
 
+showSerialBuffer :: Debugger ()
+showSerialBuffer = do
+  sb <- use $ cpu.serial_buffer
+  liftIO $ putStrLn $ map (chr.fi) $ V.toList sb
 
 dispatch :: [String] -> Debugger ()
 dispatch [] = step >> readLogList 2
@@ -131,6 +135,8 @@ dispatch (cmd:args) = case cmd of
   "log" -> changeLoggerIsLogging
   "mbc" -> showMBCState
   "pc" -> toPC $ T.read $ head args
+  "serial" -> showSerialBuffer
+  "s" -> showSerialBuffer
   "match" -> do
     let re = mkRegex $ head args
     toMatch re
@@ -145,6 +151,9 @@ dispatch (cmd:args) = case cmd of
     else 
       readLogList 0xff
   "exit" -> error "exit"
+  "quit" -> error "quit"
+  "q" -> error "quit"
+
   _ -> do 
     if all isNumber cmd then do
       replicateM_ (T.read cmd) step
@@ -175,13 +184,13 @@ debugger  file = do
   go debuggerState 0
   where
     go ds n = do
-      (_, ds') <- runStateT executeDebugger ds
-      when (n < 10000000) $ go ds' (n + 1)
+      --(_, ds') <- runStateT executeDebugger ds
+      --when (n < 10000000) $ go ds' (n + 1)
 
-      --(_, ds') <- runStateT shell ds
-      --go ds' (n + 1)
+      (_, ds') <- runStateT shell ds
+      go ds' (n + 1)
 
-main' = debugger "roms/gb_test_roms/cpu_instrs/cpu_instrs.gb"
+main' = debugger "roms/gb-test-roms/cpu_instrs/cpu_instrs.gb"
 
 --main :: IO ()
 --main = do

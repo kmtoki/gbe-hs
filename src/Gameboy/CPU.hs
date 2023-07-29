@@ -236,11 +236,13 @@ executeCPU = do
   else
     dispatch
 
-  serial
-  timer
-  interrupt
+  cycle <- use $ cpu.cycleM
+  forM_ [1 .. cycle] $ \i -> do
+    serial
+    timer
+    interrupt
+    cpu.sys_counter += 1
 
-  cpu.sys_counter += 4
   cpu.exe_counter += 1
 
 
