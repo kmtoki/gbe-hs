@@ -312,10 +312,11 @@ interrupt = do
       push' l'
       --write IE $ clearBit enable bit
       write IF $ clearBit request bit
-      cpu.pc .= addr
-      cpu.ime .= False
-      cpu.halting .= False
-      cpu.cycleM += 5
+      cpu 
+        %= (pc .~ addr) 
+        . (ime .~ False) 
+        . (halting .~ False) 
+        . (cycleM %~ (+5))
       log 4 ("Interrupt: " ++ cate ++ " from " ++ showHex pc')
 
 
@@ -460,20 +461,23 @@ ld16 op1 op2 = do
 ld8_id_a_p_hl :: (Word16 -> Word16) -> String -> GB ()
 ld8_id_a_p_hl f s = do
   hl' <- use $ cpu.hl
-  cpu.a <~ read hl'
-  cpu.hl %= f
+  w <- read hl'
+
+  cpu %= (a .~ w) 
+    . (hl %~ f)
+    . (cycleM %~ (+ 2))
 
   logI s A P_HL Non
-  cpu.cycleM += 2
 
 ld8_id_p_hl_a :: (Word16 -> Word16) -> String -> GB ()
 ld8_id_p_hl_a f s = do
   hl' <- use $ cpu.hl
   a' <- use $ cpu.a
   write hl' a'
-  cpu.hl %= f
 
-  cpu.cycleM += 2
+  cpu %= (hl %~ f)
+    . (cycleM %~ (+2))
+
   logI s P_HL A Non
 
 ld16_hl_sp_w :: GB ()
@@ -481,13 +485,14 @@ ld16_hl_sp_w = do
   w <- readPC
   sp' <- use $ cpu.sp 
   let (sp'',c',h') = add_Word16_SignedWord8_IsCarryHalf sp' w
-  cpu.hl .= sp''
 
-  cpu.zero .= False
-  cpu.negative .= False
-  cpu.half .= h'
-  cpu.carry .= c'
-  cpu.cycleM += 3
+  cpu %= (hl .~ sp'')
+    . (zero .~ False)
+    . (negative .~ False)
+    . (half .~ h')
+    . (carry .~ c')
+    . (cycleM %~ (+3))
+
   logI "LD" HL SP $ Signed8 w
 
 push :: OP -> GB ()
@@ -506,21 +511,22 @@ pop op = do
   h' <- pop'
   writeOP16 op $ toWW h' l'
 
-  logI "POP" op (showHex $ toWW h' l') Non
   cpu.cycleM += 3
+  logI "POP" op (showHex $ toWW h' l') Non
 
 add :: OP -> GB ()
 add op = do
   a' <- use $ cpu.a
   w <- readOP8 op
   let (a'', c', h') = add8_IsCarryHalf a' w
-  cpu.a .= a''
 
-  cpu.zero .= isZero a''
-  cpu.negative .= False
-  cpu.half .= h'
-  cpu.carry .= c'
-  cpu.cycleM += 1
+  cpu %= (a .~ a'')
+    . (zero .~ isZero a'')
+    . (negative .~ False)
+    . (half .~ h')
+    . (carry .~ c')
+    . (cycleM %~ (+1))
+
   logI "ADD" op (Rst $ showHex w) ""
 
 adc :: OP -> GB ()
@@ -531,13 +537,14 @@ adc op = do
   let 
     (a'', c'', h'') = add8_IsCarryHalf a' w
     (a''', c''', h''') = add8_IsCarryHalf a'' $ toNum c'
-  cpu.a .= a'''
 
-  cpu.zero .= isZero a'''
-  cpu.negative .= False
-  cpu.half .= (h'' || h''')
-  cpu.carry .= (c'' || c''')
-  cpu.cycleM += 1
+  cpu %= (a .~ a''')
+    . (zero .~ isZero a''')
+    . (negative .~ False)
+    . (half .~ (h'' || h'''))
+    . (carry .~ (c'' || c'''))
+    . (cycleM %~ (+1))
+
   logI "ADC" op (Rst $ showHex w) Non
 
 sub :: OP -> GB ()
@@ -545,13 +552,14 @@ sub op = do
   a' <- use $ cpu.a
   w <- readOP8 op
   let (a'', c', h') = sub8_IsCarryHalf a' w
-  cpu.a .= a''
 
-  cpu.zero .= isZero a''
-  cpu.negative .= True
-  cpu.half .= h'
-  cpu.carry .= c'
-  cpu.cycleM += 1
+  cpu %= (a .~ a'')
+    . (zero .~ isZero a'')
+    . (negative .~ True)
+    . (half .~ h')
+    . (carry .~ c')
+    . (cycleM %~ (+1))
+ 
   logI "SUB" op (Rst $ showHex w) Non
 
 sbc :: OP -> GB ()
@@ -562,13 +570,14 @@ sbc op = do
   let 
     (a'', c'', h'') = sub8_IsCarryHalf a' w
     (a''', c''', h''') = sub8_IsCarryHalf a'' $ toNum c'
-  cpu.a .= a'''
 
-  cpu.zero .= isZero a'''
-  cpu.negative .= True
-  cpu.half .= (h'' || h''')
-  cpu.carry .= (c'' || c''')
-  cpu.cycleM += 1
+  cpu %= (a .~ a''')
+    . (zero .~ isZero a''')
+    . (negative .~ True)
+    . (half .~ (h'' || h'''))
+    . (carry .~ (c'' || c'''))
+    . (cycleM %~ (+1))
+
   logI "SBC" op (Rst $ showHex w) Non
 
 and :: OP -> GB ()
@@ -576,13 +585,14 @@ and op = do
   a' <- use $ cpu.a
   w <- readOP8 op
   let a'' = a' .&. w
-  cpu.a .= a''
 
-  cpu.zero .= isZero a''
-  cpu.negative .= False
-  cpu.half .= True
-  cpu.carry .= False
-  cpu.cycleM += 1
+  cpu %= (a .~ a'')
+    . (zero .~ isZero a'')
+    . (negative .~ False)
+    . (half .~ True)
+    . (carry .~ False)
+    . (cycleM %~ (+1))
+
   logI "AND" op (Rst $ showHex w) Non
 
 or :: OP -> GB ()
@@ -590,13 +600,14 @@ or op = do
   a' <- use $ cpu.a
   w <- readOP8 op
   let a'' = a' .|. w
-  cpu.a .= a''
 
-  cpu.zero .= isZero a''
-  cpu.negative .= False
-  cpu.half .= False
-  cpu.carry .= False
-  cpu.cycleM += 1
+  cpu %= (a .~ a'')
+    . (zero .~ isZero a'')
+    . (negative .~ False)
+    . (half .~ False)
+    . (carry .~ False)
+    . (cycleM %~ (+1))
+
   logI "OR" op (Rst $ showHex w) Non
 
 xor :: OP -> GB ()
@@ -604,13 +615,14 @@ xor op = do
   a' <- use $ cpu.a
   w <- readOP8 op
   let a'' = a' `B.xor` w
-  cpu.a .= a''
 
-  cpu.zero .= isZero a''
-  cpu.negative .= False
-  cpu.half .= False
-  cpu.carry .= False
-  cpu.cycleM += 1
+  cpu %= (a .~ a'')
+    . (zero .~ isZero a'')
+    . (negative .~ False)
+    . (half .~ False)
+    . (carry .~ False)
+    . (cycleM %~ (+1))
+
   logI "XOR" op (Rst $ showHex w) Non
 
 cp :: OP -> GB ()
@@ -619,11 +631,12 @@ cp op = do
   w <- readOP8 op
   let (a'', c', h') = sub8_IsCarryHalf a' w
 
-  cpu.zero .= isZero a''
-  cpu.negative .= True
-  cpu.half .= h'
-  cpu.carry .= c'
-  cpu.cycleM += 1
+  cpu %= (zero .~ isZero a'')
+   . (negative .~ True)
+   . (half .~ h')
+   . (carry .~ c')
+   . (cycleM %~ (+1))
+
   logI "CP" op (Rst $ showHex w) Non
 
 inc8 :: OP -> GB ()
@@ -632,10 +645,11 @@ inc8 op = do
   let (w', c', h') = add8_IsCarryHalf w 1
   writeOP8 op w'
 
-  cpu.zero .= isZero w'
-  cpu.negative .= False
-  cpu.half .= h'
-  cpu.cycleM += 1
+  cpu %= (zero .~ isZero w')
+    . (negative .~ False)
+    . (half .~ h')
+    . (cycleM %~ (+1))
+
   logI "INC" op (Rst $ showHex w') Non
 
 dec8 :: OP -> GB ()
@@ -644,10 +658,11 @@ dec8 op = do
   let (w', c', h') = sub8_IsCarryHalf w 1
   writeOP8 op w'
 
-  cpu.zero .= isZero w'
-  cpu.negative .= True
-  cpu.half .= h'
-  cpu.cycleM += 1
+  cpu %= (zero .~ isZero w')
+    . (negative .~ True)
+    . (half .~ h')
+    . (cycleM %~ (+1))
+
   logI "DEC" op (Rst $ showHex w') Non
 
 add_hl :: OP -> GB ()
@@ -655,12 +670,13 @@ add_hl op = do
   hl' <- use $ cpu.hl
   ww <- readOP16 op
   let (hl'',carry',half') = add16_IsCarryHalf hl' ww
-  cpu.hl .= hl''
 
-  cpu.negative .= False
-  cpu.half .= half'
-  cpu.carry .= carry'
-  cpu.cycleM += 2
+  cpu %= (hl .~ hl'')
+    . (negative .~ False)
+    . (half .~ half')
+    . (carry .~ carry')
+    . (cycleM %~ (+2))
+
   logI "ADD" HL op $ Rst $ showHex ww
 
 add_sp :: GB ()
@@ -668,13 +684,14 @@ add_sp = do
   sp' <- use $ cpu.sp
   w <- readPC
   let (sp'', c', h') = add_Word16_SignedWord8_IsCarryHalf sp' w
-  cpu.sp .= sp''
 
-  cpu.zero .= False
-  cpu.negative .= False
-  cpu.half .= h'
-  cpu.carry .= c'
-  cpu.cycleM += 2
+  cpu %= (sp .~ sp'')
+    . (zero .~ False)
+    . (negative .~ False)
+    . (half .~ h')
+    . (carry .~ c')
+    . (cycleM %~ (+2))
+
   logI "ADD" SP w $ showSignedWord8 w
 
 inc16 :: OP -> GB ()
@@ -683,8 +700,9 @@ inc16 op = do
   let (ww', carry', _) = add16_IsCarryHalf ww 1
   writeOP16 op ww'
   
-  cpu.carry .= carry'
-  cpu.cycleM += 2
+  cpu %= (carry .~ carry')
+    . (cycleM %~ (+2))
+
   logI "INC" op (Rst $ showHex ww) Non
 
 dec16 :: OP -> GB ()
@@ -692,9 +710,10 @@ dec16 op = do
   ww <- readOP16 op
   let (ww', carry', _) = sub16_IsCarryHalf ww 1
   writeOP16 op ww'
+
+  cpu %= (carry .~ carry')
+    . (cycleM %~ (+2))
   
-  cpu.carry .= carry'
-  cpu.cycleM += 2
   logI "DEC" op (Rst $ showHex ww) Non
 
 daa :: GB ()
@@ -717,60 +736,66 @@ daa = do
       cpu.a .= 0x6
 
   a'' <- use $ cpu.a
-  cpu.zero .= isZero a''
-  cpu.half .= False
-  cpu.cycleM += 1
+
+  cpu %= (zero .~ isZero a'')
+    . (half .~ False)
+    . (cycleM %~ (+1))
+
   logI "DAA" (Rst $ showHex a'') Non Non
 
 cpl :: GB ()
 cpl = do
-  cpu.a %= complement
+  cpu %= (a %~ complement)
+    . (negative .~ True)
+    . (half .~ True)
+    . (cycleM %~ (+1))
 
-  cpu.negative .= True
-  cpu.half .= True
-  cpu.cycleM += 1
   logI "CPL" A Non Non
       
 ccf :: GB ()
 ccf = do
-  cpu.carry %= not
+  cpu %= (carry %~ not)
+    . (negative .~ False)
+    . (half .~ False)
+    . (cycleM %~ (+1))
 
-  cpu.negative .= False
-  cpu.half .= False
-  cpu.cycleM += 1
   logI "CCF" Carry Non Non
 
 scf :: GB ()
 scf = do
-  cpu.carry .= True
+  cpu %= (carry .~ True)
+    . (negative .~ False)
+    . (half .~ False)
+    . (cycleM %~ (+1))
 
-  cpu.negative .= False
-  cpu.half .= False
-  cpu.cycleM += 1
   logI "SCF" Carry Non Non
 
 halt :: GB ()
 halt = do
-  cpu.halting .= True
-  cpu.cycleM += 1
+  cpu %= (halting .~ True)
+    . (cycleM %~ (+1))
+
   logI "HALT" Non Non Non
 
 stop :: GB ()
 stop = do
-  cpu.stoping .= True
-  cpu.cycleM += 1
+  cpu %= (stoping .~ True)
+    . (cycleM %~ (+1))
+
   logI "STOP" Non Non Non
 
 di :: GB ()
 di = do
-  cpu.ime .= False
-  cpu.cycleM += 1
+  cpu %= (ime .~ False)
+    . (cycleM %~ (+1))
+
   logI "DI" Non Non Non
 
 ei :: GB ()
 ei = do
-  cpu.ime .= True
-  cpu.cycleM += 1
+  cpu %= (ime .~ True)
+    . (cycleM %~ (+1))
+
   logI "EI" Non Non Non
 
 jp :: OP -> GB ()
@@ -843,20 +868,22 @@ rst ww = do
   let (h',l') = sepWW pc'
   push' h'
   push' l'
-  cpu.pc .= ww
 
-  cpu.cycleM += 8
+  cpu %= (pc .~ ww)
+    . (cycleM %~ (+8))
+
   logI "RST" (showHex ww) Non Non
  
 reti :: GB ()
 reti = do
   l' <- pop'
   h' <- pop'
-  cpu.pc .= toWW h' l'
-  cpu.ime .= True
+  let pc' = toWW h' l'
 
-  cpu.cycleM += 2
-  pc' <- use $ cpu.pc
+  cpu %= (pc .~ pc')
+    . (ime .~ True)
+    . (cycleM %~ (+2))
+
   logI "RETI" (showHex pc') Non Non
 
 ret :: OP -> GB ()
@@ -890,104 +917,112 @@ swap op = do
   let w' =  shift (w .&. 0xf) 4 .|. shift w (-4)
   writeOP8 op w'
 
-  cpu.zero .= isZero w'
-  cpu.negative .= False
-  cpu.half .= False
-  cpu.carry .= False
-  cpu.cycleM += 1
+  cpu %= (zero .~ isZero w')
+    . (negative .~ False)
+    . (half .~ False)
+    . (carry .~ False)
+    . (cycleM %~ (+1))
+
   logI "SWAP" op (Rst $ showHex w') Non
 
 rlc :: OP -> GB ()
 rlc op = do
   w <- readOP8 op
-  cpu.carry .= (1 == shift w (-7))
   let w' = rotateL w 1
   writeOP8 op w' 
 
-  cpu.zero .= isZero w'
-  cpu.negative .= False
-  cpu.half .= False
-  cpu.cycleM += 1
+  cpu %= (zero .~ isZero w')
+    . (negative .~ False)
+    . (half .~ False)
+    . (carry .~ (1 == shift w (-7)))
+    . (cycleM %~ (+1))
+
   logI "RLC" op (Rst $ showHex w') Non
 
 rl :: OP -> GB ()
 rl op = do
   w <- readOP8 op
   carry' <- use $ cpu.carry
-  cpu.carry .= (1 == shift w (-7))
   let w' = shift w 1 .|. toNum carry'
   writeOP8 op w'
 
-  cpu.zero .= isZero w'
-  cpu.negative .= False
-  cpu.half .= False
-  cpu.cycleM += 1
+  cpu %= (zero .~ isZero w')
+    . (carry .~ (1 == shift w (-7)))
+    . (negative .~ False)
+    . (half .~ False)
+    . (cycleM %~ (+1))
+
   logI "RL" op (Rst $ showHex w') Non
 
 rrc :: OP -> GB ()
 rrc op = do
   w <- readOP8 op
-  cpu.carry .= (1 == (w .&. 1))
   let w' = rotateR w 1
   writeOP8 op w'
 
-  cpu.zero .= isZero w'
-  cpu.negative .= False
-  cpu.half .= False
-  cpu.cycleM += 1
+  cpu %= (zero .~ isZero w')
+    . (negative .~ False)
+    . (half .~ False)
+    . (carry .~ (1 == (w .&. 1)))
+    . (cycleM %~ (+1))
+
   logI "RRC" op (Rst $ showHex w') Non
 
 rr :: OP -> GB ()
 rr op = do
   w <- readOP8 op
   carry' <- use $ cpu.carry
-  cpu.carry .= (1 == (w .&. 1))
   let w' = shift (toNum carry') 7 .|. shift w (-1)
   writeOP8 op w'
 
-  cpu.zero .= isZero w'
-  cpu.negative .= False
-  cpu.half .= False
-  cpu.cycleM += 1
+  cpu %= (zero .~ isZero w')
+    . (negative .~ False)
+    . (half .~ False)
+    . (carry .~ (1 == (w .&. 1)))
+    . (cycleM %~ (+1))
+
   logI "RR" op (Rst $ showHex w') Non
 
 sla :: OP -> GB ()
 sla op = do
   w <- readOP8 op
-  cpu.carry .= (1 == shift w (-7))
   let w' = shift w 1
   writeOP8 op w'
 
-  cpu.zero .= isZero w'
-  cpu.negative .= False
-  cpu.half .= False
-  cpu.cycleM += 2
+  cpu %= (zero .~ isZero w')
+    . (negative .~ False)
+    . (half .~ False)
+    . (carry .~ (1 == shift w (-7)))
+    . (cycleM %~ (+2))
+
   logI "SLA" op (Rst $ showHex w') Non
 
 sra :: OP -> GB ()
 sra op = do
   w <- readOP8 op
-  cpu.carry .= (1 == (w .&. 1))
   let w' = (w .&. 0x80) .|. shift w (-1)
   writeOP8 op w'
 
-  cpu.zero .= isZero w'
-  cpu.negative .= False
-  cpu.half .= False
-  cpu.cycleM += 1
+  cpu %= (zero .~ isZero w')
+    . (negative .~ False)
+    . (half .~ False)
+    . (carry .~ (1 == (w .&. 1)))
+    . (cycleM %~ (+1))
+
   logI "SRA" op (Rst $ showHex w') Non
 
 srl :: OP -> GB ()
 srl op = do
   w <- readOP8 op
-  cpu.carry .= (1 == (w .&. 1))
   let w' = shift w (-1)
   writeOP8 op w'
 
-  cpu.zero .= isZero w'
-  cpu.negative .= False
-  cpu.half .= False
-  cpu.cycleM += 1
+  cpu %= (zero .~ isZero w')
+    . (negative .~ False)
+    . (half .~ False)
+    . (carry .~ (1 == (w .&. 1)))
+    . (cycleM %~ (+1))
+
   logI "SRL" op (Rst $ showHex w') Non
 
 bit :: Int -> OP -> GB ()
@@ -996,10 +1031,11 @@ bit i op = do
   let w' = testBit w i
   writeOP8 op $ toNum w'
 
-  cpu.zero .= w'
-  cpu.negative .= False
-  cpu.half .= True
-  cpu.cycleM += 1
+  cpu %= (zero .~ w')
+    . (negative .~ False)
+    . (half .~ True)
+    . (cycleM %~ (+1))
+
   logI "BIT" i op (Rst $ show w')
 
 set :: Int -> OP -> GB ()
