@@ -62,8 +62,8 @@ writeMBC1 :: Int -> Word8 -> GB ()
 writeMBC1 i w
   | 0x0 <= i && i <= 0x1fff = do
     mbc.mbcnState.enableRAMX .= (w == 0xa)
-    ram' <- use $ mbc.memory.ram
-    lift $ VM.write ram' i w
+    --ram' <- use $ mbc.memory.ram
+    --lift $ VM.write ram' i w
 
   | 0x2000 <= i && i <= 0x3fff = do
     let w' = if w == 0 then 1 else (w .&. 0x1f)
@@ -74,8 +74,8 @@ writeMBC1 i w
       b' = shift b2 19 .|. shift b1 14
       b = if b' == 0x8000 || b' == 0x100000 || b' == 0x180000 then b' + 0x4000 else b'
     mbc.mbcnState.bank .= b
-    ram' <- use $ mbc.memory.ram
-    lift $ VM.write ram' i w'
+    --ram' <- use $ mbc.memory.ram
+    --lift $ VM.write ram' i w'
     logging 3 $ "MBC1: bank1 to " ++ showHex' w
     
   | 0x4000 <= i && i <= 0x5fff = do
@@ -86,8 +86,8 @@ writeMBC1 i w
       b' = shift b2 19 .|. shift b1 14
       b = if b' == 0x8000 || b' == 0x100000 || b' == 0x180000 then b' + 0x4000 else b'
     mbc.mbcnState.bank .= b
-    ram' <- use $ mbc.memory.ram
-    lift $ VM.write ram' i w
+    --ram' <- use $ mbc.memory.ram
+    --lift $ VM.write ram' i w
     logging 3 $ "MBC1: bank2 to " ++ showHex' w
 
   | 0x6000 <= i && i <= 0x7fff = do
@@ -98,8 +98,8 @@ writeMBC1 i w
     else do
       mbc.mbcnState.bankingMode .= False
       mbc.mbcnState.bankRAMX .= 0
-    ram' <- use $ mbc.memory.ram
-    lift $ VM.write ram' i w
+    --ram' <- use $ mbc.memory.ram
+    --lift $ VM.write ram' i w
 
   | 0xa000 <= i && i <= 0xbfff = do
     (Just e) <- preuse $ mbc.mbcnState.enableRAMX
