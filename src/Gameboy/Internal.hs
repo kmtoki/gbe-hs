@@ -21,11 +21,6 @@ data Memory =
     _ramx :: RAM
   }
 
-newtype ITable = ITable (V.Vector (GB ()))
-
-instance Show ITable where
-  show (ITable _) = "ITable (..)"
-
 data CPUState = CPUState {
     _a, __f, _b, _c, _d, _e, _h, _l :: Word8,
     _sp, _pc :: Word16,
@@ -39,10 +34,8 @@ data CPUState = CPUState {
     _stoping :: Bool,
     _cycle :: Int,
     _cycleM :: Int,
-    _exe_counter :: Word64,
-    _iTable :: ITable
+    _exe_counter :: Word64
   } deriving Show
-
 
 data MBCState = MBCState {
     _mbcnState :: MBCNState,
