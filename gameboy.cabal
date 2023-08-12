@@ -1,6 +1,6 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.34.4.
+-- This file has been generated from package.yaml by hpack version 0.35.2.
 --
 -- see: https://github.com/sol/hpack
 
@@ -45,6 +45,7 @@ library
       RecordWildCards
       DuplicateRecordFields
       ScopedTypeVariables
+      StandaloneDeriving
       GeneralizedNewtypeDeriving
       DerivingVia
       MultiParamTypeClasses
@@ -74,6 +75,7 @@ executable gameboy-exe
       RecordWildCards
       DuplicateRecordFields
       ScopedTypeVariables
+      StandaloneDeriving
       GeneralizedNewtypeDeriving
       DerivingVia
       MultiParamTypeClasses
@@ -105,6 +107,7 @@ test-suite gameboy-test
       RecordWildCards
       DuplicateRecordFields
       ScopedTypeVariables
+      StandaloneDeriving
       GeneralizedNewtypeDeriving
       DerivingVia
       MultiParamTypeClasses

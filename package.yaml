@@ -40,8 +40,8 @@ default-extensions:
 - RecordWildCards
 - DuplicateRecordFields
 - ScopedTypeVariables
+- StandaloneDeriving
 #- RankNTypes
-#- StandaloneDeriving
 #- FlexibleInstances
 #- TypeFamilies
 #- GADTs

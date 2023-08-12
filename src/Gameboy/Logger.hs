@@ -19,20 +19,14 @@ newLoggerState n p l s = do
 
 logging :: Int -> String -> GB ()
 logging nn str = do
-  n <- use $ logger.level
-  when (n <= nn) $ do
-    p <- use $ logger.isPrint
-    when p $ do
+  logger' <- use logger
+  when ((logger'^.level) <= nn) $ do
+    when (logger'^.isPrint) $ do
       liftIO $ putStrLn str
 
-    l <- use $ logger.isLogging
-    when l $ do
-      size <- use $ logger.bufSize
-      buf <- use $ logger.buffer
-      p <- use $ logger.pos
- 
-      liftIO $ VM.write buf p str
-      if (p + 1) == size then
+    when (logger'^.isLogging) $ do
+      liftIO $ VM.write (logger'^.buffer) (logger'^.pos) str
+      if ((logger'^.pos) + 1) == (logger'^.bufSize) then
         logger.pos .= 0
       else
         logger.pos += 1
