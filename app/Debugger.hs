@@ -168,31 +168,28 @@ shell :: Debugger ()
 shell = do
   cmds <- lift $ words <$> getLine
   dispatch cmds
+  shell
 
 
-executeDebugger :: Debugger ()
-executeDebugger = do
-  --logger.isPrint .= True
-  step
-
-debugger :: String -> IO ()
-debugger  file = do
+runDebugger :: String -> IO ()
+runDebugger  file = do
   debuggerState <- newDebuggerState file
   print $ debuggerState^.mbc^.memory^.cartrige
-  go debuggerState 0
-  where
-    go ds n = do
-      --(_, ds') <- runStateT executeDebugger ds
-      --if n < 10000000 then
-      --  go ds' (n + 1)
-      --else do
-      --  runStateT ((logger.isPrint .= True) >> step >> showSerial) ds'
-      --  pure ()
-        
-      (_, ds') <- runStateT shell ds
-      go ds' (n + 1)
+  evalStateT shell debuggerState
+  --go debuggerState 0
+  --where
+  --  go ds n = do
+  --    --(_, ds') <- runStateT executeDebugger ds
+  --    --if n < 10000000 then
+  --    --  go ds' (n + 1)
+  --    --else do
+  --    --  runStateT ((logger.isPrint .= True) >> step >> showSerial) ds'
+  --    --  pure ()
+  --      
+  --    (_, ds') <- runStateT shell ds
+  --    go ds' (n + 1)
 
-main' = debugger "roms/gb-test-roms/cpu_instrs/cpu_instrs.gb"
+main' = runDebugger "roms/gb-test-roms/cpu_instrs/cpu_instrs.gb"
 
 --main :: IO ()
 --main = do
