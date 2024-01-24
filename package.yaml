@@ -23,7 +23,6 @@ dependencies:
 - base >= 4.7 && < 5
 - vector
 - bytestring
-- mason
 
 default-extensions: 
 - GHC2021

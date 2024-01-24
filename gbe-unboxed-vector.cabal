@@ -47,7 +47,6 @@ library
   build-depends:
       base >=4.7 && <5
     , bytestring
-    , mason
     , vector
   default-language: Haskell2010
 
@@ -68,7 +67,6 @@ executable gbe-unboxed-vector-exe
       base >=4.7 && <5
     , bytestring
     , gbe-unboxed-vector
-    , mason
     , vector
   default-language: Haskell2010
 
@@ -90,6 +88,5 @@ test-suite gbe-unboxed-vector-test
       base >=4.7 && <5
     , bytestring
     , gbe-unboxed-vector
-    , mason
     , vector
   default-language: Haskell2010
