@@ -1,14 +1,14 @@
-name:                gameboy
+name:                gbe-unboxed-vector
 version:             0.1.0.0
-github:              "kmtoki/gbe-hs"
-license:             BSD3
-author:              "kmtoki"
-maintainer:          ""
-copyright:           ""
+github:              "githubuser/gbe-unboxed-vector"
+license:             BSD-3-Clause
+author:              "Author name here"
+maintainer:          "example@example.com"
+copyright:           "2023 Author name here"
 
 extra-source-files:
 - README.md
-- ChangeLog.md
+- CHANGELOG.md
 
 # Metadata used when publishing your package
 # synopsis:            Short description of your package
@@ -17,45 +17,35 @@ extra-source-files:
 # To avoid duplicated efforts in documentation and dealing with the
 # complications of embedding Haddock markup inside cabal files, it is
 # common to point users to the README.md file.
-description:         Please see the README on GitHub at <https://github.com/githubuser/gameboy#readme>
+description:         Please see the README on GitHub at <https://github.com/githubuser/gbe-unboxed-vector#readme>
 
 dependencies:
 - base >= 4.7 && < 5
-- bytestring
 - vector
-- microlens-platform
-- mtl
-- regex-compat
+- bytestring
+- mason
+
+default-extensions: 
+- GHC2021
+- RecordWildCards
+- OverloadedStrings
+
+ghc-options:
+- -Wall
+- -Wcompat
+- -Widentities
+- -Wincomplete-record-updates
+- -Wincomplete-uni-patterns
+- -Wmissing-export-lists
+- -Wmissing-home-modules
+- -Wpartial-fields
+- -Wredundant-constraints
 
 library:
   source-dirs: src
 
-default-extensions: 
-- TemplateHaskell
-- OverloadedStrings
-- OverloadedLabels
-- BinaryLiterals
-- Strict
-- StrictData
-- RecordWildCards
-- DuplicateRecordFields
-- ScopedTypeVariables
-#- RankNTypes
-#- StandaloneDeriving
-#- FlexibleInstances
-#- TypeFamilies
-#- GADTs
-#- DataKinds
-#- KindSignatures
-#- FlexibleInstances
-#- OverloadedRecordDot
-- GeneralizedNewtypeDeriving
-- DerivingVia
-- MultiParamTypeClasses
-
-
 executables:
-  gameboy-exe:
+  gbe-unboxed-vector-exe:
     main:                Main.hs
     source-dirs:         app
     ghc-options:
@@ -63,15 +53,10 @@ executables:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - gameboy
-    when:        
-    - condition: false        
-      other-modules: Paths_gameboy
-
-
+    - gbe-unboxed-vector
 
 tests:
-  gameboy-test:
+  gbe-unboxed-vector-test:
     main:                Spec.hs
     source-dirs:         test
     ghc-options:
@@ -79,7 +64,4 @@ tests:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - gameboy
-    when:        
-    - condition: false        
-      other-modules: Paths_tests_gameboy
+    - gbe-unboxed-vector
