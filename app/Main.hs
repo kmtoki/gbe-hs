@@ -1,13 +1,23 @@
 module Main where
 
-import System.Environment
-import Control.Concurrent
-import Control.Concurrent.MVar
-import qualified Data.Vector as V
-import qualified Text.Read as T
+import Gameboy
 
-import qualified Debugger2 as D
---import qualified Disassembler as DD
+import System.Environment
+import Control.Monad
+
+
+loop :: GameboyState -> Int -> IO ()
+loop gb n = do
+  gb' <- runGameboy gb
+  when (n `mod` 1000000 == 0) $ putStrLn $ serialToString gb'
+  if n < 26000000 then
+    loop gb' (n + 1)
+  else
+    putStrLn $ serialToString gb'
 
 main :: IO ()
-main = D.main'
+main = do
+  [rom] <- getArgs
+  gb <- newGameboyState rom
+  loop gb 1
+

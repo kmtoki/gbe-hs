@@ -107,5 +107,4 @@ debugger rom = do
       ((((_,ds'),cpu'),mbc'),logger') <- run logger $ run mbc $ run cpu $ run ds shell
       go ds' cpu' mbc' logger'
 
---main' = debugger "roms/gb_test_roms/cpu_instrs/cpu_instrs.gb"
-main' = debugger "C:\\Users\\higum\\Github\\gbe-hs\\roms\\gb-test-roms\\cpu_instrs\\cpu_instrs.gb"
+main' = debugger "rom/gb_test_roms/cpu_instrs/cpu_instrs.gb"

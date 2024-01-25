@@ -205,7 +205,7 @@ debugger  file = do
       go ds' (n + 1)
 
 --main' = debugger "roms/gb_test_roms/cpu_instrs/cpu_instrs.gb"
-main' = debugger "C:\\Users\\higum\\Github\\gbe-hs\\roms\\gb-test-roms\\cpu_instrs\\cpu_instrs.gb"
+main' = debugger "C:\\Users\\higum\\Github\\gbe-hs\\rom\\gb-test-roms\\cpu_instrs\\cpu_instrs.gb"
 
 --main :: IO ()
 --main = do
