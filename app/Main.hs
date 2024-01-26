@@ -16,15 +16,13 @@ main = do
 loop :: GB -> Int -> IO ()
 loop gb n = do
   stepGB gb
+
+  --when (n `mod` 1000000 == 0) $ do
+  --  ss <- print $ serialToString gb
+  --  putStrLn ss
+
   if n < 26000000 then
     loop gb (n + 1)
   else do
     ss <- serialToString gb
     putStrLn ss
-    
-  --when (n `mod` 1000000 == 0) $ do
-    --l <- readLog gb
-    --ss <- serialToString gb
-    --putStrLn l
-    --putStrLn ss
-  --loop gb (n + 1)
