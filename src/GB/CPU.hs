@@ -1425,6 +1425,6 @@ stepCPU cpu = do
   replicateM_ (fi cycle * 4) $ do
     serial cpu
     timer cpu
-    --joypad cpu
+    joypad cpu
     interrupt cpu
     modifyReg64 cpu SysCounter (+ 1)
