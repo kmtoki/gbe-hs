@@ -4,6 +4,7 @@ module GB.Utils (
   module Data.Int,
   module Data.Word,
   module Control.Monad,
+  module Control.Monad.Reader,
 
   Store,
   newStore,
@@ -42,9 +43,10 @@ import Data.Word
 import Data.Int
 import Data.Char (chr, intToDigit, toUpper)
 import Control.Monad
+import Control.Monad.Reader
 import Numeric qualified as N
 
-import Data.Vector qualified as V
+--import Data.Vector qualified as V
 import Data.Vector.Unboxed qualified as VU
 import Data.Vector.Unboxed.Mutable qualified as VM
 
@@ -114,31 +116,31 @@ instance SubCarryHalf Word16 Word16 where
 fi :: (Integral a, Integral b) => a -> b
 fi = fromIntegral
 
-showHex'' :: (Show a, Integral a) => a -> String
+showHex'' :: (Integral a) => a -> String
 showHex'' x = map toUpper $ N.showHex x ""
 
-showHex :: (Show a, Integral a) => a -> String
+showHex :: (Integral a) => a -> String
 --showHex a = "$" ++ showHex'' a
 showHex x = N.showHex x ""
 
-showHex' :: (Show a, Integral a) => a -> String
+showHex' :: (Integral a) => a -> String
 showHex' x = if length s == 1 then "0" ++ s else s
   where
     s = showHex'' x
 
-showHex16 :: (Show a, Integral a) => a -> String
+showHex16 :: (Integral a) => a -> String
 showHex16 a = "$" ++ showHex16' a
 
-showHex16' :: (Show a, Integral a) => a -> String
+showHex16' :: (Integral a) => a -> String
 showHex16' x = if l > 0 then replicate l '0' ++ s else s
   where
     s = showHex'' x
     l = 4 - length s
 
-showBin :: (Show a, Integral a) => a -> String
+showBin :: (Integral a) => a -> String
 showBin a = "0b" ++ N.showIntAtBase 2 intToDigit a ""
 
-showBin' :: (Show a, Integral a) => a -> String
+showBin' :: (Integral a) => a -> String
 showBin' a = N.showIntAtBase 2 intToDigit a ""
 
 showSignedWord8 :: Word8 -> String

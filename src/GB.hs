@@ -1,4 +1,4 @@
-module GB (GB(..), newGB, stepGB, serialToString, setLogging, readLog) where
+module GB (GB(..), newGBState, stepGB, serialToString, setLogging, readLog) where
 
 import GB.Cartridge
 import GB.CPU
@@ -6,28 +6,30 @@ import GB.MBC
 import GB.Logger
 import GB.Utils
 
+import Prelude hiding (log)
+
 import Data.ByteString qualified as B
 import Data.ByteString.Char8 qualified as BC
 
-data GB = GB CPU
 
-newGB :: String -> IO GB
-newGB file = do
+newGBState :: String -> IO GBState
+newGBState file = do
   car <- readFileCartridge file
   mbc <- newMBC car
   cpu <- newCPU mbc
-  pure $ GB cpu
+  pure $ GBState cpu
 
-stepGB :: GB -> IO ()
-stepGB (GB cpu) = stepCPU cpu
+stepGB :: GB ()
+stepGB = stepCPU
 
-serialToString :: GB -> IO String
-serialToString (GB cpu) = (BC.unpack . B.pack) <$> readSerial cpu
+serialToString :: GB String
+serialToString = (BC.unpack . B.pack) <$> readSerial
 
-setLogging :: GB -> Bool -> IO ()
-setLogging (GB cpu) b = setIsLogging cpu b
+setLogging :: Bool -> GB ()
+setLogging = setIsLogging
 
-readLog :: GB -> IO String
-readLog (GB (CPU {..})) = do
-  [log] <- readsLogger cpuLogger 1
+readLog :: GB String
+readLog  = do
+  CPU {..} <- getCPU
+  [log] <- liftIO $ readsLogger cpuLogger 1
   pure $ showCPULog log 

@@ -14,10 +14,10 @@ data MBCRegisters
   deriving (Enum, Show)
 
 readReg :: MBC -> MBCRegisters -> IO Word64
-readReg mbc@(MBC {..}) r = readStore regs $ fromEnum r
+readReg (MBC {..}) r = readStore regs $ fromEnum r
 
 writeReg :: MBC -> MBCRegisters -> Word64 -> IO ()
-writeReg mbc@(MBC {..}) r n = writeStore regs (fromEnum r) n
+writeReg (MBC {..}) r n = writeStore regs (fromEnum r) n
 
 newMBC1 :: Cartridge -> IO MBC
 newMBC1 cartridge = do

@@ -1,0 +1,45 @@
+module GB.Internal (
+--  GB(..),
+--  GBState(..),
+--  CPU(..)
+  ) where
+--
+--
+--import Control.Monad.Reader
+--
+--import GB.Logger
+--import GB.MBC
+--import GB.Utils
+--
+--newtype GB a = GB { runGB :: ReaderT GBState IO a }
+--  deriving (Functor, Applicative, Monad, MonadReader GBState)
+--
+--data GBState = GBState {
+--  cpu :: CPU
+--  }
+--
+--data CPU = CPU { 
+--  mbc :: MBC,
+--  cpuLogger :: Logger CPULog,
+--  serialLogger :: Logger Word8,
+--  joypadBuffer :: Store Word8,
+--
+--  regs8 :: Store Word8,
+--  regs16 :: Store Word16,
+--  regs64 :: Store Word64
+--  }
+--
+--
+----data MBC = MBC {
+----  regs :: Store Word64,
+----  cartridge :: Cartridge,
+----  rom :: ROM,
+----  ram :: RAM,
+----  ramEx ::RAM
+----  }
+--
+----getCPU :: GB CPU
+----getCPU = cpu <$> ask
+--
+----getMBC :: GB MBC
+----getMBC = mbc <$> ask

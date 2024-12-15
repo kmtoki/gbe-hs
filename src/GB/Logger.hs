@@ -13,10 +13,10 @@ data LoggerRegisters = Size | Pos
   deriving (Enum)
 
 readReg :: Logger a -> LoggerRegisters -> IO Int
-readReg logger@(Logger{..}) r = readStore regs $ fromEnum r
+readReg (Logger{..}) r = readStore regs $ fromEnum r
 
 writeReg :: Logger a -> LoggerRegisters -> Int -> IO ()
-writeReg logger@(Logger{..}) r a = writeStore regs (fromEnum r) a
+writeReg (Logger{..}) r a = writeStore regs (fromEnum r) a
 
 newLogger :: Int -> a -> IO (Logger a)
 newLogger size a = do 
