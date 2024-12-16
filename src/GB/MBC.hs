@@ -1,35 +1,48 @@
-module GB.MBC (MBC, newMBC, readMBC, writeMBC, readGBReg, writeGBReg, modifyGBReg, readMBCROMBank) where
+module GB.MBC (
+  MBC(..), 
+  newMBC,
+  readMBC,
+  writeMBC,
+  readGBReg,
+  writeGBReg,
+  modifyGBReg,
+  readMBCROMBank
+  ) where
 
+import GB.Prelude
+import GB.Internal
 import GB.Cartridge
-import GB.Utils
 
-import GB.MBC.Internal
 import GB.MBC.MBC1
 
 newMBC :: Cartridge -> IO MBC
-newMBC car = case mbcType car of
+newMBC car = case car.mbcType of
   MBC1 -> newMBC1 car
   _ -> error "newMBC unimplement MBCType"
 
-readMBC :: MBC -> Word16 -> IO Word8
-readMBC mbc@(MBC {..}) i = case mbcType cartridge of
-  MBC1 -> readMBC1 mbc i
-  _ -> error "readMBC unimplement MBCType"
+readMBC :: Word16 -> GB Word8
+readMBC i = do
+  mbc <- getMBC
+  mbc.reader i
   
-writeMBC :: MBC -> Word16 -> Word8 -> IO ()
-writeMBC mbc@(MBC {..}) i n = case mbcType cartridge of
-  MBC1 -> writeMBC1 mbc i n
-  _ -> error "writeMBC unimplement MBCType"
+writeMBC :: Word16 -> Word8 -> GB ()
+writeMBC i n = do
+  mbc <- getMBC
+  mbc.writer i n
 
-readGBReg :: MBC -> GBRegisters -> IO Word8
-readGBReg mbc r = readMBC mbc $ fi $ toInt r
+readGBReg :: GBRegisters -> GB Word8
+readGBReg r = readMBC $ fi $ toInt r
 
-writeGBReg :: MBC -> GBRegisters -> Word8 -> IO ()
-writeGBReg mbc r n = writeMBC mbc (fi $ toInt r) n
+writeGBReg :: GBRegisters -> Word8 -> GB ()
+writeGBReg r n = writeMBC (fi $ toInt r) n
 
-modifyGBReg :: MBC -> GBRegisters -> (Word8 -> Word8) -> IO ()
-modifyGBReg mbc r f = readGBReg mbc r >>= writeGBReg mbc r . f
+modifyGBReg :: GBRegisters -> (Word8 -> Word8) -> GB ()
+modifyGBReg r f = do
+  a <- readGBReg r
+  writeGBReg r $ f a
 
 
-readMBCROMBank :: MBC -> IO Word64
-readMBCROMBank (MBC {..}) = readStore regs 2
+readMBCROMBank :: GB Word64
+readMBCROMBank = do
+  mbc <- getMBC
+  readStore mbc.regs 2

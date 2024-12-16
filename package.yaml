@@ -25,11 +25,18 @@ dependencies:
 - bytestring
 - mtl
 
-default-extensions: 
-- GHC2021
-- RecordWildCards
-- OverloadedStrings
+language: GHC2021
 
+default-extensions: 
+- Strict
+- StrictData
+- OverloadedStrings
+- RecordWildCards
+- NoFieldSelectors
+- DuplicateRecordFields
+- OverloadedRecordDot
+- RebindableSyntax 
+ 
 ghc-options:
 - -Wall
 - -Wcompat

@@ -1,19 +1,16 @@
-module GB.Utils (
+module GB.Prelude (
+  module GHC.Records,
+
+  module Prelude,
   module Data.Bits,
   module Data.Char,
   module Data.Int,
   module Data.Word,
+  module Data.String,
   module Control.Monad,
   module Control.Monad.Reader,
 
-  Store,
-  newStore,
-  readStore,
-  writeStore,
-  modifyStore,
-
-  ROM,
-  RAM,
+  ifThenElse,
 
   addCarryHalf,
   subCarryHalf,
@@ -38,41 +35,23 @@ module GB.Utils (
   toInt
   ) where
 
+import GHC.Records
+
+import Prelude
+import Control.Monad
+import Control.Monad.Reader
 import Data.Bits
 import Data.Word
 import Data.Int
 import Data.Char (chr, intToDigit, toUpper)
-import Control.Monad
-import Control.Monad.Reader
-import Numeric qualified as N
-
---import Data.Vector qualified as V
+import Data.String
 import Data.Vector.Unboxed qualified as VU
 import Data.Vector.Unboxed.Mutable qualified as VM
+import Numeric qualified as N
 
-
-newtype Store a = Store (VM.MVector (VM.PrimState IO) a)
-
-newStore :: VM.Unbox a => Int -> a -> IO (Store a)
-newStore size a = do
-  v <- VM.replicate size a
-  pure $ Store v
-
-readStore :: VM.Unbox a => Store a -> Int -> IO a
-readStore (Store v) i = VM.read v i
-
-writeStore :: VM.Unbox a => Store a -> Int -> a -> IO ()
-writeStore (Store v) i w = VM.write v i w
-
-modifyStore :: VM.Unbox a => Store a -> Int -> (a -> a) -> IO ()
-modifyStore v i f = do
-  w <- readStore v i
-  writeStore v i $ f w
-
-
-type RAM = Store Word8
-type ROM = VU.Vector Word8
-
+ifThenElse :: Bool -> a -> a -> a
+ifThenElse True a _ = a
+ifThenElse False _ a = a
 
 class (Num a, Num b) => AddCarryHalf a b where
   addCarryHalf :: a -> b -> (a, Bool, Bool)
@@ -124,7 +103,9 @@ showHex :: (Integral a) => a -> String
 showHex x = N.showHex x ""
 
 showHex' :: (Integral a) => a -> String
-showHex' x = if length s == 1 then "0" ++ s else s
+showHex' x 
+  | length s == 1 = "0" ++ s 
+  | otherwise = s
   where
     s = showHex'' x
 
@@ -132,7 +113,9 @@ showHex16 :: (Integral a) => a -> String
 showHex16 a = "$" ++ showHex16' a
 
 showHex16' :: (Integral a) => a -> String
-showHex16' x = if l > 0 then replicate l '0' ++ s else s
+showHex16' x
+  | l > 0 = replicate l '0' ++ s 
+  | otherwise = s
   where
     s = showHex'' x
     l = 4 - length s
@@ -144,11 +127,9 @@ showBin' :: (Integral a) => a -> String
 showBin' a = N.showIntAtBase 2 intToDigit a ""
 
 showSignedWord8 :: Word8 -> String
-showSignedWord8 i = 
-  if testBit i 7 then
-      "-" ++ show (128 - clearBit i 7)
-  else
-      "+" ++ show (clearBit i 7)
+showSignedWord8 i
+  | testBit i 7 = "-" ++ show (128 - clearBit i 7)
+  | otherwise = "+" ++ show (clearBit i 7)
 
 
 toWord16 :: Word8 -> Word8 -> Word16

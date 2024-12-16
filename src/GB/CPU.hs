@@ -1,8 +1,4 @@
 module GB.CPU (
-  GB(..),
-  GBState(..),
-  CPU(..),
-  getCPU,
   newCPU, 
   stepCPU, 
   readSerial, 
@@ -13,91 +9,18 @@ module GB.CPU (
   --joypadBuffer, 
   ) where
 
+import GB.Prelude hiding (log, and, or, bit, xor)
+import GB.Internal
+import GB.Internal.CPU
+import GB.MBC
+import GB.Logger
+
 import Prelude hiding (log, cycle, and, or)
 import Data.List (intersperse)
-
-import GB.Logger 
-import GB.MBC
-import GB.Utils hiding (bit, xor)
 
 import Data.ByteString.Char8 qualified as B
 import Data.ByteString.Builder qualified as B
 
-newtype GB a = GB { runGB :: ReaderT GBState IO a }
-  deriving (Functor, Applicative, Monad, MonadFail, MonadIO, MonadReader GBState)
-
-data GBState = GBState {
-  cpu :: CPU
-  }
-
-data CPU = CPU { 
-  mbc :: MBC,
-  cpuLogger :: Logger CPULog,
-  serialLogger :: Logger Word8,
-  joypadBuffer :: Store Word8,
-
-  regs8 :: Store Word8,
-  regs16 :: Store Word16,
-  regs64 :: Store Word64
-  }
-
-
-getCPU :: GB CPU
-getCPU = cpu <$> ask
-
-
-data CPUFlags = Carry | Half | Negative | Zero
-  deriving (Enum, Show)
-
-data CPURegisters8 = A | F | B | C | D | E | H | L | IME | Halt | Cycle | IsLogging
-  deriving (Enum, Show, Eq)
-
-data CPURegisters16 = SP | PC
-  deriving (Enum, Show)
-
-data CPURegisters64 = SysCounter | ExeCounter
-  deriving (Enum, Show)
-
-data Op8 
-  = Reg8 CPURegisters8
-  | A_
-  | N
-  | P_BC | P_DE | P_HL | P_NN_8
-  | P_FF00_N | P_FF00_C
-  | P_HL_INC
-  | P_HL_DEC
-  deriving (Show, Eq)
-
-data Op16
-  = Reg16 CPURegisters16
-  | AF | BC | DE | HL
-  | NN
-  | P_NN_16
-  deriving Show
-
-data OpCond
-  = IsZero | IsCarry | NotZero | NotCarry
-  | Always
-  deriving Show
-
-
-data CPULog = CPULog { 
-  a,f,b,c,d,e,h,l,halting,ime :: Word8,
-  sp,pc :: Word16,
-  exeCounter :: Word64,
-  mbcROMBank :: Word64,
-  regIF,regIE :: Word8,
-  codes :: [Word8],
-  stack :: [Word8],
-  instruction :: String,
-  op1, op2, op3 :: CPUOpLog
-  }
-
-data CPUOpLog 
-  = Log8 Op8 | Log16 Op16 | LogCond OpCond 
-  | LogInfo String
-  | LogInfoW8 Word8 | LogInfoW16 Word16 | LogInfoI8 Int8 
-  | None
 
 log :: String -> CPUOpLog -> CPUOpLog -> CPUOpLog -> GB ()
 log instruction op1 op2 op3 = do
@@ -107,11 +30,11 @@ log instruction op1 op2 op3 = do
     [a,f,b,c,d,e,h,l,ime,halting] <- mapM readReg8 [A,F,B,C,D,E,H,L,IME,Halt]
     [sp,pc'] <- mapM readReg16 [SP,PC]
     let pc = pc' - 1
-    codes <- mapM (liftIO . readMBC mbc . (+ pc)) [0..3]
-    stack <- mapM (liftIO . readMBC mbc . (sp -)) [0..3]
+    codes <- mapM (readMBC . (+ pc)) [0..3]
+    stack <- mapM (readMBC . (sp -)) [0..3]
     [exeCounter] <- mapM readReg64 [ExeCounter]
-    [regIF,regIE] <- mapM (liftIO . readGBReg mbc) [IF,IE]
-    mbcROMBank <- liftIO $ readMBCROMBank mbc
+    [regIF,regIE] <- mapM readGBReg [IF,IE]
+    mbcROMBank <- readMBCROMBank
     liftIO $ writeLogger cpuLogger $ CPULog {..}
 
 showCPULog :: CPULog -> String
@@ -148,36 +71,35 @@ showCPULog (CPULog {..}) = B.unpack $ B.toStrict $ B.toLazyByteString $
       None -> ""
 
 
-
 readReg8 :: CPURegisters8 -> GB Word8
 readReg8 r = do
   CPU {..} <- getCPU
-  liftIO $ readStore regs8 $ fromEnum r
+  readStore regs8 $ fromEnum r
 
 readReg16 :: CPURegisters16 -> GB Word16
 readReg16 r = do
   CPU {..} <- getCPU
-  liftIO $ readStore regs16 $ fromEnum r
+  readStore regs16 $ fromEnum r
 
 readReg64 :: CPURegisters64 -> GB Word64
 readReg64 r = do
   CPU {..} <- getCPU
-  liftIO $ readStore regs64 $ fromEnum r
+  readStore regs64 $ fromEnum r
 
 writeReg8 :: CPURegisters8 -> Word8 -> GB ()
 writeReg8 r n = do
   CPU {..} <- getCPU
-  liftIO $ writeStore regs8 (fromEnum r) n
+  writeStore regs8 (fromEnum r) n
 
 writeReg16 :: CPURegisters16 -> Word16 -> GB ()
 writeReg16 r n = do
   CPU {..} <- getCPU
-  liftIO $ writeStore regs16 (fromEnum r) n
+  writeStore regs16 (fromEnum r) n
 
 writeReg64 :: CPURegisters64 -> Word64 -> GB ()
 writeReg64 r n = do
   CPU {..} <- getCPU
-  liftIO $ writeStore regs64 (fromEnum r) n
+  writeStore regs64 (fromEnum r) n
 
 modifyReg8 :: CPURegisters8 -> (Word8 -> Word8) -> GB ()
 modifyReg8 r f = readReg8 r >>= writeReg8 r . f
@@ -211,8 +133,8 @@ readSerial = do
   liftIO $ readAllLogger serialLogger
 
 
-newCPU :: MBC -> IO CPU
-newCPU mbc = do
+newCPU :: IO CPU
+newCPU = do
   cpuLogger <- newLogger 0xffff (CPULog 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 [0,0,0,0] [0,0,0,0] "" None None None)
   serialLogger <- newLogger 0xffff 0
   joypadBuffer <- newStore 1 0xff
@@ -220,7 +142,7 @@ newCPU mbc = do
   r16 <- newStore 0xff 0
   r64 <- newStore 0xff 0
 
-  let cpu = CPU mbc cpuLogger serialLogger joypadBuffer r8 r16 r64
+  let cpu = CPU cpuLogger serialLogger joypadBuffer r8 r16 r64
 
   --writeReg16 SP 0xfffe
   --writeReg16 PC 0x100
@@ -237,7 +159,7 @@ fetch8 = do
   pc <- readReg16 PC
   writeReg16 PC $ pc + 1
   tick
-  liftIO $ readMBC mbc pc
+  readMBC pc
 
 fetch16 :: GB Word16
 fetch16 = do
@@ -250,7 +172,7 @@ push8 n = do
   CPU {..} <- getCPU
   sp <- subtract 1 <$> readReg16 SP
   writeReg16 SP sp
-  liftIO $ writeMBC mbc sp n
+  writeMBC sp n
   tick
 
 push16 :: Word16 -> GB ()
@@ -263,7 +185,7 @@ pop8 :: GB Word8
 pop8 = do
   CPU {..} <- getCPU
   sp <- readReg16 SP
-  n <- liftIO $ readMBC mbc sp
+  n <- readMBC sp
   modifyReg16 SP (+ 1)
   tick
   pure n
@@ -274,29 +196,29 @@ pop16 = do
   h <- pop8
   pure $ toWord16 h l
 
-readOp8 :: Op8 -> GB Word8
+readOp8 :: CPUOp8 -> GB Word8
 readOp8 op = do
   CPU {..} <- getCPU
   case op of
     Reg8 r -> readReg8 r
     A_ -> readReg8 A
     N -> fetch8
-    P_BC -> readOp16 BC >>= liftIO . readMBC mbc
-    P_DE -> readOp16 DE >>= liftIO . readMBC mbc
-    P_HL -> readOp16 HL >>= liftIO . readMBC mbc
-    P_NN_8 -> fetch16 >>= liftIO . readMBC mbc
-    P_FF00_N -> fetch8 >>= liftIO . readMBC mbc . (0xff00 +) . fi
-    P_FF00_C -> readReg8 C >>= liftIO . readMBC mbc . (0xff00 +) . fi
+    P_BC -> readOp16 BC >>= readMBC
+    P_DE -> readOp16 DE >>= readMBC
+    P_HL -> readOp16 HL >>= readMBC
+    P_NN_8 -> fetch16 >>= readMBC
+    P_FF00_N -> fetch8 >>= readMBC . (0xff00 +) . fi
+    P_FF00_C -> readReg8 C >>= readMBC . (0xff00 +) . fi
     P_HL_INC -> do
       hl <- readOp16 HL
       writeOp16 HL $ hl + 1
-      liftIO $ readMBC mbc hl
+      readMBC hl
     P_HL_DEC -> do
       hl <- readOp16 HL
       writeOp16 HL $ hl - 1
-      liftIO $ readMBC mbc hl
+      readMBC hl
 
-readOp16 :: Op16 -> GB Word16
+readOp16 :: CPUOp16 -> GB Word16
 readOp16 op = case op of
   Reg16 r -> readReg16 r
   AF -> toWord16 <$> readReg8 A <*> readReg8 F
@@ -306,29 +228,29 @@ readOp16 op = case op of
   NN -> fetch16
   _ -> error $ "CPU.readOp16 unexpect " ++ show op
 
-writeOp8 :: Op8 -> Word8 -> GB ()
+writeOp8 :: CPUOp8 -> Word8 -> GB ()
 writeOp8 op n = do
   CPU {..} <- getCPU
   case op of
     Reg8 r -> writeReg8 r n
     A_ -> writeReg8 A n
-    P_BC -> readOp16 BC >>= \a -> liftIO $ writeMBC mbc a n
-    P_DE -> readOp16 DE >>= \a -> liftIO $ writeMBC mbc a n
-    P_HL -> readOp16 HL >>= \a -> liftIO $ writeMBC mbc a n
-    P_NN_8 -> fetch16 >>= \a -> liftIO $ writeMBC mbc a n
-    P_FF00_C -> readReg8 C >>= \c -> liftIO $ writeMBC mbc (0xff00 + fi c) n
-    P_FF00_N -> fetch8 >>= \a -> liftIO $ writeMBC mbc (0xff00 + fi a) n
+    P_BC -> readOp16 BC >>= \a -> writeMBC a n
+    P_DE -> readOp16 DE >>= \a -> writeMBC a n
+    P_HL -> readOp16 HL >>= \a -> writeMBC a n
+    P_NN_8 -> fetch16 >>= \a -> writeMBC a n
+    P_FF00_C -> readReg8 C >>= \c -> writeMBC (0xff00 + fi c) n
+    P_FF00_N -> fetch8 >>= \a -> writeMBC (0xff00 + fi a) n
     P_HL_INC -> do
       hl <- readOp16 HL
       writeOp16 HL $ hl + 1
-      liftIO $ writeMBC mbc hl n
+      writeMBC hl n
     P_HL_DEC -> do
       hl <- readOp16 HL
       writeOp16 HL $ hl - 1
-      liftIO $ writeMBC mbc hl n
+      writeMBC hl n
     _ -> error $ "CPU.writeOp8 unexpect " ++ show op
 
-writeOp16 :: Op16 -> Word16 -> GB ()
+writeOp16 :: CPUOp16 -> Word16 -> GB ()
 writeOp16 op n =
   let (h,l) = sepWord16 n in 
     case op of
@@ -340,11 +262,11 @@ writeOp16 op n =
       P_NN_16 -> do
         CPU {..} <- getCPU
         a <- fetch16
-        liftIO $ writeMBC mbc a l
-        liftIO $ writeMBC mbc (a + 1) h
+        writeMBC a l
+        writeMBC (a + 1) h
       _ -> error $ "CPU.writeOp16 unexpect " ++ show op
 
-condFlag :: OpCond -> GB Bool
+condFlag :: CPUOpCond -> GB Bool
 condFlag op = case op of
   IsZero -> readFlag Zero
   NotZero -> not <$> readFlag Zero
@@ -353,13 +275,13 @@ condFlag op = case op of
   Always -> pure True
 
 
-ld8 :: Op8 -> Op8 -> GB ()
+ld8 :: CPUOp8 -> CPUOp8 -> GB ()
 ld8 op1 op2 = do
   log "LD" (Log8 op1) (Log8 op2) None
   n <- readOp8 op2
   writeOp8 op1 n
 
-ld16 :: Op16 -> Op16 -> GB ()
+ld16 :: CPUOp16 -> CPUOp16 -> GB ()
 ld16 op1 op2 = do
   log "LD" (Log16 op1) (Log16 op2) None
   n <- readOp16 op2
@@ -383,20 +305,20 @@ ld16_hl_sp_n = do
   writeFlag Zero False
   tick
 
-push :: Op16 -> GB ()
+push :: CPUOp16 -> GB ()
 push op = do
   log "PUSH" (Log16 op) None None
   n <- readOp16 op
   tick
   push16 n
   
-pop :: Op16 -> GB ()
+pop :: CPUOp16 -> GB ()
 pop op = do
   log "POP" (Log16 op) None None
   n <- pop16
   writeOp16 op n
 
-add :: Op8 -> GB ()
+add :: CPUOp8 -> GB ()
 add op = do
   log "ADD" (Log8 op) None None
   a <- readReg8 A
@@ -408,7 +330,7 @@ add op = do
   writeFlag Negative False
   writeFlag Zero $ a' == 0
 
-adc :: Op8 -> GB ()
+adc :: CPUOp8 -> GB ()
 adc op = do
   log "ADC" (Log8 op) None None
   a <- readReg8 A
@@ -422,7 +344,7 @@ adc op = do
   writeFlag Negative False
   writeFlag Zero $ a'' == 0
 
-sub :: Op8 -> GB ()
+sub :: CPUOp8 -> GB ()
 sub op = do
   log "SUB" (Log8 op) None None
   a <- readReg8 A
@@ -434,7 +356,7 @@ sub op = do
   writeFlag Negative True
   writeFlag Zero $ a' == 0
 
-sbc :: Op8 -> GB ()
+sbc :: CPUOp8 -> GB ()
 sbc op = do
   log "SBC" (Log8 op) None None
   a <- readReg8 A
@@ -448,7 +370,7 @@ sbc op = do
   writeFlag Negative True
   writeFlag Zero $ a'' == 0
 
-and :: Op8 -> GB ()
+and :: CPUOp8 -> GB ()
 and op = do
   log "AND" (Log8 op) None None
   a <- readReg8 A
@@ -460,7 +382,7 @@ and op = do
   writeFlag Negative False
   writeFlag Zero $ a' == 0
 
-or :: Op8 -> GB ()
+or :: CPUOp8 -> GB ()
 or op = do
   log "OR" (Log8 op) None None
   a <- readReg8 A
@@ -472,7 +394,7 @@ or op = do
   writeFlag Negative False
   writeFlag Zero $ a' == 0
 
-xor :: Op8 -> GB ()
+xor :: CPUOp8 -> GB ()
 xor op = do
   log "XOR" (Log8 op) None None
   a <- readReg8 A
@@ -484,7 +406,7 @@ xor op = do
   writeFlag Negative False
   writeFlag Zero $ a' == 0
 
-cp :: Op8 -> GB ()
+cp :: CPUOp8 -> GB ()
 cp op = do
   log "CP" (Log8 op) None None
   a <- readReg8 A
@@ -495,7 +417,7 @@ cp op = do
   writeFlag Negative True
   writeFlag Zero $ a' == 0
 
-inc8 :: Op8 -> GB ()
+inc8 :: CPUOp8 -> GB ()
 inc8 op = do
   log "INC" (Log8 op) None None
   a <- readOp8 op
@@ -505,7 +427,7 @@ inc8 op = do
   writeFlag Negative False
   writeFlag Zero $ a' == 0
 
-dec8 :: Op8 -> GB ()
+dec8 :: CPUOp8 -> GB ()
 dec8 op = do
   log "DEC" (Log8 op) None None
   a <- readOp8 op
@@ -515,7 +437,7 @@ dec8 op = do
   writeFlag Negative True
   writeFlag Zero $ a' == 0
 
-add_hl :: Op16 -> GB ()
+add_hl :: CPUOp16 -> GB ()
 add_hl op = do
   log "DEC" (Log16 HL) (Log16 op) None
   hl <- readOp16 HL
@@ -544,14 +466,14 @@ add_sp_n = do
   tick
   tick
 
-inc16 :: Op16 -> GB ()
+inc16 :: CPUOp16 -> GB ()
 inc16 op = do
   log "INC" (Log16 op) None None
   a <- readOp16 op
   let (a',_,_) = addCarryHalf a (1 :: Word16)
   writeOp16 op a'
 
-dec16 :: Op16 -> GB ()
+dec16 :: CPUOp16 -> GB ()
 dec16 op = do
   log "DEC" (Log16 op) None None
   a <- readOp16 op
@@ -627,7 +549,7 @@ nop = do
   log "NOP" None None None
   tick
 
-jp :: OpCond -> GB ()
+jp :: CPUOpCond -> GB ()
 jp op = do
   nn <- fetch16
 
@@ -648,7 +570,7 @@ jp_p_hl = do
   tick
 
 
-jr :: OpCond -> GB ()
+jr :: CPUOpCond -> GB ()
 jr op = do
   n <- fetch8
 
@@ -663,7 +585,7 @@ jr op = do
     writeReg16 PC pc'
     tick
 
-call :: OpCond -> GB ()
+call :: CPUOpCond -> GB ()
 call op = do
   nn <- fetch16
 
@@ -678,7 +600,7 @@ call op = do
     push16 pc
     writeReg16 PC nn
 
-ret :: OpCond -> GB ()
+ret :: CPUOpCond -> GB ()
 ret op = do
   modifyReg16 SP (+ 1)
   log "RET" (LogCond op) None None
@@ -710,7 +632,7 @@ rst nn = do
   push16 pc
   writeReg16 PC nn
 
-swap :: Op8 -> GB ()
+swap :: CPUOp8 -> GB ()
 swap op = do
   log "SWAP" (Log8 op) None None
   r <- readOp8 op
@@ -721,7 +643,7 @@ swap op = do
   writeFlag Negative False
   writeFlag Zero $ a == 0
 
-rlc :: Op8 -> GB ()
+rlc :: CPUOp8 -> GB ()
 rlc op = do
   log "RLC" (Log8 op) None None
   r <- readOp8 op
@@ -734,7 +656,7 @@ rlc op = do
   writeFlag Negative False
   writeFlag Zero $ if op == A_ then False else a == 0
 
-rl :: Op8 -> GB ()
+rl :: CPUOp8 -> GB ()
 rl op = do
   log "RL" (Log8 op) None None
   r <- readOp8 op
@@ -746,7 +668,7 @@ rl op = do
   writeFlag Negative False
   writeFlag Zero $ if op == A_ then False else a == 0
 
-rrc :: Op8 -> GB ()
+rrc :: CPUOp8 -> GB ()
 rrc op = do
   log "RRC" (Log8 op) None None
   r <- readOp8 op
@@ -759,7 +681,7 @@ rrc op = do
   writeFlag Negative False
   writeFlag Zero $ if op == A_ then False else a == 0
 
-rr :: Op8 -> GB ()
+rr :: CPUOp8 -> GB ()
 rr op = do
   log "RR" (Log8 op) None None
   r <- readOp8 op
@@ -771,7 +693,7 @@ rr op = do
   writeFlag Negative False
   writeFlag Zero $ if op == A_ then False else a == 0
 
-sla :: Op8 -> GB ()
+sla :: CPUOp8 -> GB ()
 sla op = do
   log "SLA" (Log8 op) None None
   r <- readOp8 op
@@ -782,7 +704,7 @@ sla op = do
   writeFlag Negative False
   writeFlag Zero $ a == 0
 
-sra :: Op8 -> GB ()
+sra :: CPUOp8 -> GB ()
 sra op = do
   log "SRA" (Log8 op) None None
   r <- readOp8 op
@@ -793,7 +715,7 @@ sra op = do
   writeFlag Negative False
   writeFlag Zero $ a == 0
 
-srl :: Op8 -> GB ()
+srl :: CPUOp8 -> GB ()
 srl op = do
   log "SRL" (Log8 op) None None
   r <- readOp8 op
@@ -804,7 +726,7 @@ srl op = do
   writeFlag Negative False
   writeFlag Zero $ a == 0
 
-bit :: Word8 -> Op8 -> GB ()
+bit :: Word8 -> CPUOp8 -> GB ()
 bit n op = do
   log "BIT" (Log8 op) (LogInfoW8 n) None
   r <- readOp8 op
@@ -813,14 +735,14 @@ bit n op = do
   writeFlag Negative False
   writeFlag Zero $ a == False 
 
-set :: Word8 -> Op8 -> GB ()
+set :: Word8 -> CPUOp8 -> GB ()
 set n op = do
   log "SET" (Log8 op) (LogInfoW8 n) None
   r <- readOp8 op
   let a = setBit r $ fi n
   writeOp8 op a
 
-res :: Word8 -> Op8 -> GB ()
+res :: Word8 -> CPUOp8 -> GB ()
 res n op = do
   log "RET" (Log8 op) (LogInfoW8 n) None
   r <- readOp8 op
@@ -1379,57 +1301,57 @@ executeInstruction = do
 serial :: GB ()
 serial = do
   CPU {..} <- getCPU
-  sc <- liftIO $ readGBReg mbc SC
+  sc <- readGBReg SC
   when (testBit sc 7) $ do
     let 
       ls = [512, 256, 16, 8] :: [Word64]
       clock = ls !! fi (sc .&. 0b11)
     sys <- readReg64 SysCounter
     when (sys `mod` clock == 0) $ do
-      sb <- liftIO $ readGBReg mbc SB
+      sb <- readGBReg SB
       liftIO $ writeLogger serialLogger sb
-      liftIO $ writeGBReg mbc SC $ clearBit sc 7
-      liftIO $ modifyGBReg mbc IF $ flip setBit 3
+      writeGBReg SC $ clearBit sc 7
+      modifyGBReg IF $ flip setBit 3
 
 timer :: GB ()
 timer = do
   CPU {..} <- getCPU
   sys <- readReg64 SysCounter
   when (sys `mod` 256 == 0) $ do
-    liftIO $ modifyGBReg mbc DIV (+ 1)
+    modifyGBReg DIV (+ 1)
 
-  tac <- liftIO $ readGBReg mbc TAC
+  tac <- readGBReg TAC
   when (testBit tac 2) $ do
     let 
       ls = [1024, 16, 64, 256] :: [Word64]
       clock = ls !! fi (tac .&. 0b11)
     when (sys `mod` clock == 0) $ do
-      tima <- liftIO $ readGBReg mbc TIMA
+      tima <- readGBReg TIMA
       let (tima', carry, _) = addCarryHalf tima (1 :: Word8)
       if carry then do
-        tma <- liftIO $ readGBReg mbc TMA
-        liftIO $ modifyGBReg mbc IF $ flip setBit 2
-        liftIO $ writeGBReg mbc TIMA tma
+        tma <- readGBReg TMA
+        modifyGBReg IF $ flip setBit 2
+        writeGBReg TIMA tma
       else do
-        liftIO $ writeGBReg mbc TIMA tima'
+        writeGBReg TIMA tima'
 
 joypad :: GB ()
 joypad = do
   CPU {..} <- getCPU
-  jb <- liftIO $ readStore joypadBuffer 0
-  joyp <- liftIO $ readGBReg mbc JOYP
+  jb <- readStore joypadBuffer 0
+  joyp <- readGBReg JOYP
   when (not $ testBit joyp 4) $ do
-    liftIO $ writeGBReg mbc JOYP (0b100000 .|. jb .&. 0b1111)
-    liftIO $ modifyGBReg mbc IF $ flip setBit 4
+    writeGBReg JOYP (0b100000 .|. jb .&. 0b1111)
+    modifyGBReg IF $ flip setBit 4
   when (not $ testBit joyp 5) $ do
-    liftIO $ writeGBReg mbc JOYP (0b010000 .|. jb `shiftR` 4)
-    liftIO $ modifyGBReg mbc IF $ flip setBit 4
+    writeGBReg JOYP (0b010000 .|. jb `shiftR` 4)
+    modifyGBReg IF $ flip setBit 4
     
 interrupt :: GB ()
 interrupt = do
   CPU {..} <- getCPU
-  enable <- liftIO $ readGBReg mbc IE
-  request <- liftIO $ readGBReg mbc IF
+  enable <- readGBReg IE
+  request <- readGBReg IF
   when (enable .&. request /= 0) $ do
     writeReg8 Halt 0
 
@@ -1450,7 +1372,7 @@ interrupt = do
       writeReg16 PC addr
       writeReg8 IME 0
       writeReg8 Halt 0
-      liftIO $ modifyGBReg mbc IF $ flip clearBit n
+      modifyGBReg IF $ flip clearBit n
       tick
       tick
       tick

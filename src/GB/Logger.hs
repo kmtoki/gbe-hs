@@ -1,22 +1,20 @@
-module GB.Logger (Logger, newLogger, writeLogger, readsLogger, readAllLogger) where
+module GB.Logger (newLogger, writeLogger, readsLogger, readAllLogger) where
 
-import GB.Utils
+import GB.Prelude
+import GB.Internal
 
 import Data.Vector.Mutable qualified as V
-
-data Logger a = Logger {
-  regs :: Store Int,
-  buffer :: V.IOVector a
-  }
 
 data LoggerRegisters = Size | Pos
   deriving (Enum)
 
 readReg :: Logger a -> LoggerRegisters -> IO Int
-readReg (Logger{..}) r = readStore regs $ fromEnum r
+readReg (Logger {..}) r = do
+  readStore regs $ fromEnum r
 
 writeReg :: Logger a -> LoggerRegisters -> Int -> IO ()
-writeReg (Logger{..}) r a = writeStore regs (fromEnum r) a
+writeReg (Logger {..}) r a = do
+  writeStore regs (fromEnum r) a
 
 newLogger :: Int -> a -> IO (Logger a)
 newLogger size a = do 

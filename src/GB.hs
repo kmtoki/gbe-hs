@@ -1,12 +1,11 @@
-module GB (GB(..), newGBState, stepGB, serialToString, setLogging, readLog) where
+module GB (GB(..), newGBState, runGB, stepGB, serialToString, setLogging, readLog) where
 
+import GB.Prelude
+import GB.Internal
 import GB.Cartridge
 import GB.CPU
 import GB.MBC
 import GB.Logger
-import GB.Utils
-
-import Prelude hiding (log)
 
 import Data.ByteString qualified as B
 import Data.ByteString.Char8 qualified as BC
@@ -16,8 +15,12 @@ newGBState :: String -> IO GBState
 newGBState file = do
   car <- readFileCartridge file
   mbc <- newMBC car
-  cpu <- newCPU mbc
-  pure $ GBState cpu
+  cpu <- newCPU
+  pure $ GBState cpu mbc
+
+
+runGB :: GB a -> GBState -> IO a
+runGB (GB gb) gbs = runReaderT gb gbs
 
 stepGB :: GB ()
 stepGB = stepCPU

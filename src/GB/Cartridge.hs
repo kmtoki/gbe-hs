@@ -1,92 +1,12 @@
 module GB.Cartridge (Cartridge(..), MBCType(..), readFileCartridge) where
 
-import GB.Utils
+import GB.Prelude
+import GB.Internal
+import GB.Internal.Cartridge
 
 import Data.ByteString qualified as B
 import Data.Vector.Unboxed qualified as V
 
-data Cartridge 
-  = Cartridge {
-    entryPoint :: ROM,
-    logo :: ROM,
-    title :: String,
-    manufacturerCode :: ROM,
-    cgbFlag :: CGBFlag,
-    newLicenseeCode :: String,
-    sgbFlag :: SGBFlag,
-    mbcType :: MBCType,
-    romSize :: Int,
-    ramxSize :: Int,
-    destinationCode :: DestinationCode,
-    oldLicenseeCode :: String,
-    maskROMVersionNumber :: Word8,
-    headerChecksum :: Word8,
-    globalChecksum :: Word16,
-    raw :: ROM
-  }
-
-instance Show Cartridge where
-  show (Cartridge { .. }) = 
-    "Cartridge { " 
-    ++ "entryPoint = " ++ show entryPoint 
-    -- ++ ", logo = " ++ show logo 
-    ++ ", logo = [...]"
-    ++ ", title = " ++ (show $ filter (/= '\NUL') title)
-    ++ ", manufacturerCode = " ++ show manufacturerCode 
-    ++ ", cgbFlag = " ++ show cgbFlag 
-    ++ ", newLicenseeCode = " ++ show newLicenseeCode 
-    ++ ", sgbFlag = " ++ show sgbFlag 
-    ++ ", mbcType = " ++ show mbcType 
-    ++ ", romSize = " ++ show romSize 
-    ++ ", ramxSize = " ++ show ramxSize 
-    ++ ", destinationCode = " ++ show destinationCode 
-    ++ ", oldLicenseeCode = " ++ show oldLicenseeCode 
-    ++ ", maskROMVersionNumber = " ++ show maskROMVersionNumber 
-    ++ ", headerChecksum = " ++ show headerChecksum 
-    ++ ", globalChecksum = " ++ show globalChecksum 
-    ++ ", raw = Cartridge[0x" ++ showHex (V.length raw) ++ "]"
-    ++ " }"
- 
-
-data CGBFlag = CGBOnly | CGBSupport
-  deriving Show
-
-data SGBFlag = SGBSupport | NotSGBSupport
-  deriving Show
-
-data MBCType
-  = MBC0
-  | MBC1
-  | MBC1_RAM
-  | MBC1_RAM_BATTERY
-  | MBC2
-  | MBC2_BATTERY
-  | ROM_RAM
-  | ROM_RAM_BATTERY
-  | MMM01
-  | MMM01_RAM
-  | MMM01_RAM_BATTERY
-  | MBC3_TIMER_BATTERY
-  | MBC3_TIMER_RAM_BATTERY
-  | MBC3
-  | MBC3_RAM
-  | MBC3_RAM_BATTERY
-  | MBC5
-  | MBC5_RAM
-  | MBC5_RAM_BATTERY
-  | MBC5_RUMBLE
-  | MBC5_RUMBLE_RAM
-  | MBC5_RUMBLE_RAM_BATTERY
-  | MBC6
-  | MBC7_SENSOR_RUMBLE_RAM_BATTERY
-  | POCKET_CAMERA
-  | BANDAI_TAMA5
-  | HuC3
-  | HuC1_RAM_BATTERY
-  deriving (Show, Enum)
-
-data DestinationCode = Japanese | NonJapanese
-  deriving Show
 
 readFileCartridge :: String -> IO Cartridge
 readFileCartridge s = (parseROM . V.fromList . B.unpack) <$> B.readFile s
