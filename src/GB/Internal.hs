@@ -54,9 +54,9 @@ data MBC = MBC {
   cartridge :: Cartridge,
   rom :: ROM,
   ram :: RAM,
-  ramEx ::RAM,
-  reader :: Word16 -> GB Word8,
-  writer :: Word16 -> Word8 -> GB ()
+  ramEx ::RAM
+  --reader :: Word16 -> GB Word8,
+  --writer :: Word16 -> Word8 -> GB ()
   }
 
 data Logger a = Logger {

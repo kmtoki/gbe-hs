@@ -9,13 +9,12 @@ module GB.CPU (
   --joypadBuffer, 
   ) where
 
-import GB.Prelude hiding (log, and, or, bit, xor)
+import GB.Prelude hiding (cycle, log, and, or, bit, xor)
 import GB.Internal
 import GB.Internal.CPU
 import GB.MBC
 import GB.Logger
 
-import Prelude hiding (log, cycle, and, or)
 import Data.List (intersperse)
 
 import Data.ByteString.Char8 qualified as B
@@ -155,7 +154,6 @@ tick = do
 
 fetch8 :: GB Word8
 fetch8 = do
-  CPU {..} <- getCPU
   pc <- readReg16 PC
   writeReg16 PC $ pc + 1
   tick
@@ -169,7 +167,6 @@ fetch16 = do
 
 push8 :: Word8 -> GB ()
 push8 n = do
-  CPU {..} <- getCPU
   sp <- subtract 1 <$> readReg16 SP
   writeReg16 SP sp
   writeMBC sp n
@@ -183,7 +180,6 @@ push16 n = do
 
 pop8 :: GB Word8
 pop8 = do
-  CPU {..} <- getCPU
   sp <- readReg16 SP
   n <- readMBC sp
   modifyReg16 SP (+ 1)
@@ -198,7 +194,6 @@ pop16 = do
 
 readOp8 :: CPUOp8 -> GB Word8
 readOp8 op = do
-  CPU {..} <- getCPU
   case op of
     Reg8 r -> readReg8 r
     A_ -> readReg8 A
@@ -230,7 +225,6 @@ readOp16 op = case op of
 
 writeOp8 :: CPUOp8 -> Word8 -> GB ()
 writeOp8 op n = do
-  CPU {..} <- getCPU
   case op of
     Reg8 r -> writeReg8 r n
     A_ -> writeReg8 A n
@@ -260,7 +254,6 @@ writeOp16 op n =
       DE -> writeReg8 D h >> writeReg8 E l
       HL -> writeReg8 H h >> writeReg8 L l
       P_NN_16 -> do
-        CPU {..} <- getCPU
         a <- fetch16
         writeMBC a l
         writeMBC (a + 1) h
@@ -1315,7 +1308,6 @@ serial = do
 
 timer :: GB ()
 timer = do
-  CPU {..} <- getCPU
   sys <- readReg64 SysCounter
   when (sys `mod` 256 == 0) $ do
     modifyGBReg DIV (+ 1)
@@ -1349,7 +1341,6 @@ joypad = do
     
 interrupt :: GB ()
 interrupt = do
-  CPU {..} <- getCPU
   enable <- readGBReg IE
   request <- readGBReg IF
   when (enable .&. request /= 0) $ do

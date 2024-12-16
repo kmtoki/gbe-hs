@@ -29,8 +29,8 @@ newMBC1 cartridge = do
   ramEx <- newStore 0x90000 0
   let
     rom = cartridge.raw
-    reader = readMBC1
-    writer = writeMBC1
+    --reader = readMBC1
+    --writer = writeMBC1
   pure $ MBC { .. }
 
 readMBC1 :: Word16 -> GB Word8

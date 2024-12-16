@@ -23,12 +23,19 @@ newMBC car = case car.mbcType of
 readMBC :: Word16 -> GB Word8
 readMBC i = do
   mbc <- getMBC
-  mbc.reader i
+  --mbc.reader i
+  case mbc.cartridge.mbcType of
+    MBC1 -> readMBC1 i
+    m -> error $ "readMBC: unimplement MBCType: " ++ show m
   
 writeMBC :: Word16 -> Word8 -> GB ()
 writeMBC i n = do
   mbc <- getMBC
-  mbc.writer i n
+  --mbc.writer i n
+  case mbc.cartridge.mbcType of
+    MBC1 -> writeMBC1 i n
+    m -> error $ "writeMBC: unimplement MBCType: " ++ show m
+  
 
 readGBReg :: GBRegisters -> GB Word8
 readGBReg r = readMBC $ fi $ toInt r
