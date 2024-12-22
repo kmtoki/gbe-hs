@@ -4,8 +4,11 @@ import GB
 import GB.Prelude
 
 import System.Environment
---import Control.Monad
-import Control.Monad.Reader
+
+
+msg :: String
+msg = "\NULcpu_instrs\n\n01:ok  02:ok  03:ok  04:ok  05:ok  06:ok  07:ok  08:ok  09:ok  10:ok  11:ok  \n\nPassed all tests"
+
 
 main :: IO ()
 main = do
@@ -20,12 +23,9 @@ loop :: Int -> GB ()
 loop n = do
   stepGB
 
-  --when (n `mod` 1000000 == 0) $ do
-  --  ss <- print $ serialToString gb
-  --  putStrLn ss
-
   if n < 26000000 then
     loop (n + 1)
   else do
     ss <- serialToString
     liftIO $ putStrLn ss
+
